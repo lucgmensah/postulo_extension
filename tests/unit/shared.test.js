@@ -119,3 +119,20 @@ test('formatFileSize : formate lisiblement les octets', () => {
   assert.equal(J.formatFileSize(2048), '2 Ko');
   assert.equal(J.formatFileSize(1.5 * 1024 * 1024), '1.5 Mo');
 });
+
+test('sanitizeFilename : supprime et remplace les caractères interdits', () => {
+  assert.equal(J.sanitizeFilename('Acme / SAS : Projet*'), 'Acme_SAS_Projet');
+  assert.equal(J.sanitizeFilename('  Test??? "Quotes" <> |  '), 'Test_Quotes');
+  assert.equal(J.sanitizeFilename(''), 'fichier');
+});
+
+test('buildCvZipPath : génère un chemin préfixé sans caractères interdits', () => {
+  const c = {
+    company: 'Acme / Corp',
+    title: 'Développeur Front-End',
+    cv: { name: 'mon cv (v2).pdf' }
+  };
+  const path = J.buildCvZipPath(c);
+  assert.equal(path, 'cv/Acme_Corp_Developpeur_Front-End_mon_cv_(v2).pdf');
+});
+

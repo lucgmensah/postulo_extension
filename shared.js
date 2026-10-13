@@ -271,6 +271,32 @@ var JobTracker = globalThis.JobTracker || (() => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
   }
 
+  // Assainissement des chaînes pour noms de fichiers (suppression accents et caractères interdits)
+  function sanitizeFilename(str) {
+    if (!str) return 'fichier';
+    const clean = String(str)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Supprimer accents
+      .replace(/[/\\:*?"<>|]/g, '_')   // Caractères interdits système
+      .replace(/\s+/g, '_')           // Remplacer espaces par _
+      .replace(/_+/g, '_')            // Dédupliquer les _
+      .replace(/^_+|_+$/g, '');       // Trim les _
+    return clean || 'fichier';
+  }
+
+  // Chemin cible unique et propre pour un CV dans l'archive ZIP (ex. cv/Acme_Dev_mon-cv.pdf)
+  function buildCvZipPath(candidature) {
+    const safeCompany = sanitizeFilename(candidature.company || 'Entreprise');
+    const safeTitle = sanitizeFilename(candidature.title || 'Poste');
+    const origName = (candidature.cv && candidature.cv.name) || 'cv.pdf';
+    const lastDot = origName.lastIndexOf('.');
+    const baseName = lastDot !== -1 ? origName.slice(0, lastDot) : origName;
+    const ext = lastDot !== -1 ? origName.slice(lastDot) : '';
+    const safeBaseName = sanitizeFilename(baseName);
+    const cleanExt = ext ? '.' + sanitizeFilename(ext.slice(1)) : '';
+    return `cv/${safeCompany}_${safeTitle}_${safeBaseName}${cleanExt}`;
+  }
+
   return {
     getAll,
     saveAll,
@@ -295,7 +321,9 @@ var JobTracker = globalThis.JobTracker || (() => {
     MAX_CV_SIZE,
     ALLOWED_CV_EXTENSIONS,
     validateCvFile,
-    formatFileSize
+    formatFileSize,
+    sanitizeFilename,
+    buildCvZipPath
   };
 })();
 globalThis.JobTracker = JobTracker;

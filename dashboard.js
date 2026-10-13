@@ -498,17 +498,23 @@ function deleteCandidature(id) {
 
 // --- EXPORT CSV ---
 // Contenu CSV : séparateur point-virgule (Excel FR Windows)
-function buildCSV(list) {
+function buildCSV(list, zipPathMap = null) {
   const headers = [
     'Titre du Poste', 'Entreprise', 'Statut', 'Date Action / Envoi', 'Lieu', 'Salaire',
     "Lien de l'offre", 'Contact Nom', 'Contact Email', 'Contact Telephone', 'Rappel', 'CV adapté', 'Notes'
   ];
 
-  const rows = list.map((c) => [
-    c.title, c.company, UI.statusOf(c).label, c.dateApplied, c.location, c.salary,
-    c.url, c.contactName, c.contactEmail, c.contactPhone, (c.reminderAt || '').replace('T', ' '),
-    (c.cv && c.cv.name) || '', c.notes
-  ]);
+  const rows = list.map((c) => {
+    let cvValue = (c.cv && c.cv.name) || '';
+    if (zipPathMap && zipPathMap.has(c.id)) {
+      cvValue = zipPathMap.get(c.id);
+    }
+    return [
+      c.title, c.company, UI.statusOf(c).label, c.dateApplied, c.location, c.salary,
+      c.url, c.contactName, c.contactEmail, c.contactPhone, (c.reminderAt || '').replace('T', ' '),
+      cvValue, c.notes
+    ];
+  });
 
   return [
     headers.join(';'),
@@ -522,20 +528,80 @@ function buildCSV(list) {
   ].join('\r\n');
 }
 
-function handleExportCSV() {
+async function handleExportCSV() {
   if (state.list.length === 0) {
     UI.toast('Aucune candidature à exporter.');
     return;
   }
 
-  // BOM UTF-8 pour qu'Excel Windows reconnaisse l'encodage
-  const blob = new Blob(['﻿' + buildCSV(state.list)], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `suivi_candidatures_${JobTracker.todayISO()}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  const candidaturesWithCv = state.list.filter((c) => c.cv);
+
+  // Si aucun CV rattaché, export direct du CSV seul
+  if (candidaturesWithCv.length === 0) {
+    const blob = new Blob(['﻿' + buildCSV(state.list)], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `suivi_candidatures_${JobTracker.todayISO()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    return;
+  }
+
+  // Si des CV sont présents : création de l'archive ZIP contenant le CSV + les CV
+  UI.toast("Préparation de l'archive ZIP...");
+  try {
+    const zip = new ZipBuilder();
+    const usedPaths = new Set();
+    const zipPathMap = new Map();
+
+    for (const c of candidaturesWithCv) {
+      let targetPath = JobTracker.buildCvZipPath(c);
+      if (usedPaths.has(targetPath)) {
+        const dot = targetPath.lastIndexOf('.');
+        const base = dot !== -1 ? targetPath.slice(0, dot) : targetPath;
+        const ext = dot !== -1 ? targetPath.slice(dot) : '';
+        let counter = 1;
+        while (usedPaths.has(`${base}_(${counter})${ext}`)) {
+          counter++;
+        }
+        targetPath = `${base}_(${counter})${ext}`;
+      }
+      usedPaths.add(targetPath);
+      zipPathMap.set(c.id, targetPath);
+    }
+
+    // 1. Ajouter le CSV à la racine du ZIP
+    const csvContent = '﻿' + buildCSV(state.list, zipPathMap);
+    zip.addFile(`suivi_candidatures_${JobTracker.todayISO()}.csv`, csvContent);
+
+    // 2. Ajouter les fichiers CV depuis IndexedDB
+    for (const c of candidaturesWithCv) {
+      const targetPath = zipPathMap.get(c.id);
+      const cvRecord = await CvStorage.get(c.id);
+      const fileData = cvRecord && (cvRecord.file || cvRecord.blob);
+      if (fileData) {
+        zip.addFile(targetPath, fileData);
+      }
+    }
+
+    // 3. Compiler et télécharger l'archive
+    const zipBlob = await zip.build();
+    const url = URL.createObjectURL(zipBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `suivi_candidatures_${JobTracker.todayISO()}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    UI.toast(`Export terminé (${candidaturesWithCv.length} CV inclus)`);
+  } catch (err) {
+    console.error("Erreur lors de l'export ZIP :", err);
+    UI.toast("Erreur lors de la création de l'archive d'export.");
+  }
 }
+

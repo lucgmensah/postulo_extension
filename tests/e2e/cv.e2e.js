@@ -130,3 +130,77 @@ test('E2E : Ajout d\'une nouvelle candidature avec CV depuis la popup', async ()
     await browser.close();
   }
 });
+
+test('E2E : Export complet CSV + CV sous forme d\'archive ZIP depuis le dashboard', async () => {
+  const { browser, extId } = await launch();
+
+  try {
+    const CANDIDATURE = {
+      id: 'cand-export-zip',
+      title: 'Tech Lead Node.js',
+      company: 'Acme Solutions',
+      status: 'applied',
+      dateApplied: '2026-10-13',
+      location: 'Paris',
+      cv: {
+        name: 'mon_cv.pdf',
+        size: 1024,
+        type: 'application/pdf',
+        updatedAt: '2026-10-13'
+      }
+    };
+
+    await seed(browser, [CANDIDATURE]);
+
+    const page = await openExtPage(browser, extId, 'dashboard.html');
+
+    // Sauvegarder le binaire dans IndexedDB
+    await page.evaluate(async (id) => {
+      const blob = new Blob(['%PDF-1.4 dummy pdf'], { type: 'application/pdf' });
+      await CvStorage.save(id, blob);
+    }, 'cand-export-zip');
+
+    // Intercepter le blob et le lien de téléchargement générés
+    await page.evaluate(() => {
+      window.__lastDownload = null;
+      window.__lastBlob = null;
+      const origCreate = URL.createObjectURL;
+      URL.createObjectURL = function (blob) {
+        window.__lastBlob = blob;
+        return origCreate.apply(this, arguments);
+      };
+      HTMLAnchorElement.prototype.click = function () {
+        if (this.download) {
+          window.__lastDownload = { download: this.download };
+        }
+      };
+    });
+
+    // Cliquer sur le bouton d'export
+    await page.waitForSelector('#btn-export');
+    await page.click('#btn-export');
+
+    // Attendre que le téléchargement se déclenche
+    await page.waitForFunction(() => window.__lastDownload !== null && window.__lastBlob !== null, { timeout: 4000 });
+
+    const downloadInfo = await page.evaluate(async () => {
+      const dl = window.__lastDownload;
+      const blob = window.__lastBlob;
+      const ab = await blob.arrayBuffer();
+      const bytes = new Uint8Array(ab);
+      const isPkZip = bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
+      return { download: dl.download, isPkZip, size: bytes.length, type: blob.type };
+    });
+
+    assert.ok(downloadInfo.download.endsWith('.zip'), `Le fichier téléchargé doit être un .zip : ${downloadInfo.download}`);
+    assert.ok(downloadInfo.isPkZip, 'Le fichier téléchargé doit avoir la signature PKZIP');
+    assert.equal(downloadInfo.type, 'application/zip');
+    assert.ok(downloadInfo.size > 0, 'L\'archive ne doit pas être vide');
+
+    await page.close();
+  } finally {
+    await browser.close();
+  }
+});
+
+

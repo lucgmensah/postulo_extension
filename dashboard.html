@@ -20,7 +20,7 @@
         <svg class="search__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
         <input type="search" id="search-input" class="input" placeholder="Rechercher…" aria-label="Rechercher une candidature">
       </div>
-      <button type="button" id="btn-export" class="btn btn--secondary">Exporter CSV</button>
+      <button type="button" id="btn-export" class="btn btn--secondary" title="Exporter les données (CSV ou archive ZIP avec CV)">Exporter</button>
       <button type="button" id="btn-add" class="btn btn--primary">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         Nouvelle candidature
@@ -79,6 +79,7 @@
 
   <script src="shared.js"></script>
   <script src="cv-storage.js"></script>
+  <script src="zip-builder.js"></script>
   <script src="ui.js"></script>
   <script src="dashboard.js"></script>
 </body>
