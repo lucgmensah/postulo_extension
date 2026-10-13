@@ -112,4 +112,7 @@ test('cvFieldHTML : état dropzone et état fichier rattaché', () => {
   assert.match(card, /cv_dev\.pdf/);
   assert.match(card, /id="f-cv-btn-open"/);
   assert.match(card, /id="f-cv-btn-delete"/);
+  assert.match(card, /btn--danger/);
+  assert.match(card, />Supprimer</);
 });
+

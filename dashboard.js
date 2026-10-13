@@ -11,8 +11,6 @@ const state = {
   pendingCvFile: null // fichier binaire en attente d'enregistrement
 };
 
-const pendingCvDeletions = new Map();
-
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => JobTracker.escapeHTML(s);
 
@@ -312,11 +310,28 @@ function renderPanelCv() {
         }
       }
     },
-    onDelete: () => {
+    onDelete: async () => {
+      const editId = state.panelId && state.panelId !== 'new' ? state.panelId : null;
       state.pendingCvFile = null;
       state.panelCv = null;
-      renderPanelCv();
-      UI.toast('CV retiré');
+      if (editId) {
+        try {
+          await CvStorage.delete(editId);
+        } catch (err) {
+          console.error('Erreur suppression CV IndexedDB:', err);
+        }
+        JobTracker.update((list) => {
+          return list.map((item) => (item.id === editId ? { ...item, cv: null } : item));
+        }, (saved, list) => {
+          state.list = list;
+          render();
+          renderPanelCv();
+          UI.toast('CV supprimé');
+        });
+      } else {
+        renderPanelCv();
+        UI.toast('CV retiré');
+      }
     }
   });
 }
@@ -455,9 +470,23 @@ function savePanel() {
 }
 
 // Suppression immédiate, annulable pendant 5 s (réinsertion à la position d'origine)
-function deleteCandidature(id) {
+async function deleteCandidature(id) {
   let removed = null;
   closePanel();
+
+  // Sauvegarde temporaire en mémoire pour restauration si "Annuler"
+  let cvBackupFile = null;
+  try {
+    const record = await CvStorage.get(id);
+    if (record && (record.file || record.blob)) {
+      cvBackupFile = record.file || record.blob;
+    }
+    // Suppression immédiate en base IndexedDB
+    await CvStorage.delete(id);
+  } catch (err) {
+    console.error('Erreur suppression CV IndexedDB :', err);
+  }
+
   JobTracker.update((list) => {
     const index = list.findIndex((c) => c.id === id);
     if (index === -1) return null;
@@ -468,19 +497,17 @@ function deleteCandidature(id) {
     render();
     if (!saved) return;
 
-    const timer = setTimeout(() => {
-      CvStorage.delete(id);
-      pendingCvDeletions.delete(id);
-    }, 5500);
-    pendingCvDeletions.set(id, timer);
-
     UI.toast('Candidature supprimée', {
       actionLabel: 'Annuler',
       duration: 5000,
-      onAction: () => {
-        if (pendingCvDeletions.has(id)) {
-          clearTimeout(pendingCvDeletions.get(id));
-          pendingCvDeletions.delete(id);
+      onAction: async () => {
+        // Restauration du fichier CV si présent
+        if (cvBackupFile) {
+          try {
+            await CvStorage.save(id, cvBackupFile);
+          } catch (err) {
+            console.error('Erreur restauration CV IndexedDB :', err);
+          }
         }
         JobTracker.update((current) => {
           if (current.some((c) => c.id === removed.item.id)) return null;

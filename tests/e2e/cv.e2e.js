@@ -1,11 +1,14 @@
-const { test } = require('node:test');
+const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
 const { launch, seed, readStore, openExtPage } = require('./harness.js');
 
+let browser, extId;
+before(async () => ({ browser, extId } = await launch()));
+after(async () => browser && browser.close());
+
 test('E2E : Rattachement et gestion du CV adapté sur une offre', async () => {
-  const { browser, extId } = await launch();
   const testPdfPath = path.join(__dirname, 'fixtures_test_cv.pdf');
   fs.writeFileSync(testPdfPath, '%PDF-1.4 test dummy pdf content');
 
@@ -77,12 +80,10 @@ test('E2E : Rattachement et gestion du CV adapté sur une offre', async () => {
     await page.close();
   } finally {
     if (fs.existsSync(testPdfPath)) fs.unlinkSync(testPdfPath);
-    await browser.close();
   }
 });
 
 test('E2E : Ajout d\'une nouvelle candidature avec CV depuis la popup', async () => {
-  const { browser, extId } = await launch();
   const testPdfPath = path.join(__dirname, 'fixtures_popup_cv.pdf');
   fs.writeFileSync(testPdfPath, '%PDF-1.4 test popup dummy pdf');
 
@@ -127,13 +128,10 @@ test('E2E : Ajout d\'une nouvelle candidature avec CV depuis la popup', async ()
     await page.close();
   } finally {
     if (fs.existsSync(testPdfPath)) fs.unlinkSync(testPdfPath);
-    await browser.close();
   }
 });
 
 test('E2E : Export complet CSV + CV sous forme d\'archive ZIP depuis le dashboard', async () => {
-  const { browser, extId } = await launch();
-
   try {
     const CANDIDATURE = {
       id: 'cand-export-zip',
@@ -198,9 +196,69 @@ test('E2E : Export complet CSV + CV sous forme d\'archive ZIP depuis le dashboar
     assert.ok(downloadInfo.size > 0, 'L\'archive ne doit pas être vide');
 
     await page.close();
-  } finally {
-    await browser.close();
+  } catch (err) {
+    throw err;
   }
 });
+
+test('E2E : Suppression d\'une offre avec CV : suppression immédiate du binaire et restauration sur Annuler', async () => {
+  try {
+    const CANDIDATURE = {
+      id: 'cand-cascade-del',
+      title: 'Ingénieur Cloud',
+      company: 'Cloud Corp',
+      status: 'interview',
+      dateApplied: '2026-10-13',
+      location: 'Bordeaux',
+      cv: {
+        name: 'mon_cv_cloud.pdf',
+        size: 1024,
+        type: 'application/pdf',
+        updatedAt: '2026-10-13'
+      }
+    };
+
+    await seed(browser, [CANDIDATURE]);
+
+    const page = await openExtPage(browser, extId, 'dashboard.html');
+
+    // Sauvegarder le binaire dans IndexedDB
+    await page.evaluate(async (id) => {
+      const blob = new Blob(['%PDF-1.4 dummy cloud pdf'], { type: 'application/pdf' });
+      await CvStorage.save(id, blob);
+    }, 'cand-cascade-del');
+
+    // 1. Ouvrir la carte et cliquer sur Supprimer l'offre
+    await page.waitForSelector('.kanban-card[data-id="cand-cascade-del"]');
+    await page.click('.kanban-card[data-id="cand-cascade-del"]');
+    await page.waitForSelector('#panel-delete');
+    await page.click('#panel-delete');
+    await page.waitForSelector('.panel.hidden');
+
+    // 2. Vérifier que le binaire est IMMÉDIATEMENT supprimé d'IndexedDB (sans délai de 5s)
+    const isDeletedImmediately = await page.waitForFunction(async (id) => {
+      const rec = await CvStorage.get(id);
+      return rec === null;
+    }, { timeout: 2000 }, 'cand-cascade-del');
+    assert.ok(isDeletedImmediately, 'Le binaire doit être immédiatement supprimé d\'IndexedDB');
+
+    // 3. Cliquer sur le bouton "Annuler" dans le toast
+    await page.waitForSelector('.toast__action');
+    await page.click('.toast__action');
+
+    // 4. Vérifier que la candidature et son CV sont restaurés en base
+    await page.waitForSelector('.kanban-card[data-id="cand-cascade-del"]');
+    const recordAfterRestore = await page.evaluate(async (id) => {
+      return await CvStorage.get(id);
+    }, 'cand-cascade-del');
+    assert.ok(recordAfterRestore, 'Le binaire doit être restauré dans IndexedDB après Annuler');
+
+    await page.close();
+  } catch (err) {
+    throw err;
+  }
+});
+
+
 
 

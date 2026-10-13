@@ -222,9 +222,7 @@ var UI = globalThis.UI || (() => {
         <div class="cv-file-card__actions">
           <button type="button" class="btn btn--secondary btn--sm" id="${idPrefix}-btn-open" title="Ouvrir ou télécharger">Ouvrir</button>
           <button type="button" class="btn btn--ghost btn--sm" id="${idPrefix}-btn-replace" title="Remplacer le CV">Remplacer</button>
-          <button type="button" class="icon-btn icon-btn--sm" id="${idPrefix}-btn-delete" title="Supprimer le CV" aria-label="Supprimer le CV">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-          </button>
+          <button type="button" class="btn btn--danger btn--sm" id="${idPrefix}-btn-delete" title="Supprimer le CV">Supprimer</button>
         </div>
         <input type="file" id="${idPrefix}-file-input" accept=".pdf,.doc,.docx" style="display:none;">
       </div>`;

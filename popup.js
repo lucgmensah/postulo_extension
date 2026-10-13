@@ -316,9 +316,7 @@ function renderDetail() {
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
               <span title="${esc(c.cv.name)}" style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;max-width:140px;display:inline-block;white-space:nowrap;">${esc(c.cv.name)}</span>
               <button type="button" class="btn btn--secondary btn--sm" id="detail-cv-open">Ouvrir</button>
-              <button type="button" class="icon-btn icon-btn--sm" id="detail-cv-delete" title="Supprimer le CV" aria-label="Supprimer le CV">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-              </button>
+              <button type="button" class="btn btn--danger btn--sm" id="detail-cv-delete" title="Supprimer le CV">Supprimer</button>
             </div>
           </span>
         </div>` : ''}
