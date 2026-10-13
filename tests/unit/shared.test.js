@@ -92,3 +92,30 @@ test('applyStatus : date du jour ajoutée seulement en passant à « envoyée »
   assert.equal(J.applyStatus({ status: 'wishlist', dateApplied: '2026-01-01' }, 'applied').dateApplied, '2026-01-01');
   assert.equal(J.applyStatus({ status: 'applied', dateApplied: '' }, 'interview').dateApplied, '');
 });
+
+test('createCandidature : initialise le champ cv à null', () => {
+  const c = J.createCandidature({ title: 'Dev' });
+  assert.equal(c.cv, null);
+  assert.equal(c.title, 'Dev');
+});
+
+test('validateCvFile : valide les extensions autorisées et la taille limite', () => {
+  assert.equal(J.validateCvFile(null).valid, false);
+  assert.equal(J.validateCvFile({ name: 'cv.exe', size: 1000 }).valid, false);
+  assert.equal(J.validateCvFile({ name: 'cv.png', size: 1000 }).valid, false);
+  
+  // Extensions valides
+  assert.equal(J.validateCvFile({ name: 'cv.pdf', size: 1000 }).valid, true);
+  assert.equal(J.validateCvFile({ name: 'cv.doc', size: 1000 }).valid, true);
+  assert.equal(J.validateCvFile({ name: 'CV_FINAL.DOCX', size: 1000 }).valid, true);
+
+  // Dépassement de taille (> 10 Mo)
+  assert.equal(J.validateCvFile({ name: 'cv.pdf', size: 11 * 1024 * 1024 }).valid, false);
+});
+
+test('formatFileSize : formate lisiblement les octets', () => {
+  assert.equal(J.formatFileSize(0), '0 o');
+  assert.equal(J.formatFileSize(500), '500 o');
+  assert.equal(J.formatFileSize(2048), '2 Ko');
+  assert.equal(J.formatFileSize(1.5 * 1024 * 1024), '1.5 Mo');
+});

@@ -3,3 +3,4 @@ node_modules/
 tests/e2e/screenshots/
 
 *.zip
+.agents/

@@ -18,7 +18,9 @@ const state = {
   detected: null, // offre détectée dans l'onglet courant
   pageInfo: null, // titre / URL de la page ouverte, même hors offre reconnue
   addPrefill: null, // valeurs initiales de la vue Ajout
-  addStatus: 'wishlist' // statut proposé dans la vue Ajout
+  addStatus: 'wishlist', // statut proposé dans la vue Ajout
+  addCvFile: null, // fichier binaire en cours d'ajout
+  addCvMeta: null // métadonnées du CV en cours d'ajout
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -307,6 +309,19 @@ function renderDetail() {
           <button type="button" id="reminder-save" class="btn btn--primary">OK</button>
           <p id="reminder-error" class="form-error" role="alert"></p>
         </div>
+        ${c.cv ? `
+        <div class="field-row" data-field="cv">
+          <span class="field-row__label">CV adapté</span>
+          <span class="field-row__value" id="detail-cv-container">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <span title="${esc(c.cv.name)}" style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;max-width:140px;display:inline-block;white-space:nowrap;">${esc(c.cv.name)}</span>
+              <button type="button" class="btn btn--secondary btn--sm" id="detail-cv-open">Ouvrir</button>
+              <button type="button" class="icon-btn icon-btn--sm" id="detail-cv-delete" title="Supprimer le CV" aria-label="Supprimer le CV">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+          </span>
+        </div>` : ''}
         ${row('date', 'Date', esc(formatDate(c.dateApplied)))}
         ${row('location', 'Lieu', esc(c.location))}
         ${row('salary', 'Salaire', esc(c.salary))}
@@ -321,6 +336,56 @@ function renderDetail() {
   $('#detail-edit').addEventListener('click', () => openDashboard(c.id));
   bindStatusMenu(c.id);
   bindReminderEditor(c.id);
+
+  const cvOpen = $('#detail-cv-open');
+  if (cvOpen) {
+    cvOpen.addEventListener('click', async () => {
+      try {
+        await CvStorage.openOrDownload(c.id, c.cv && c.cv.name);
+      } catch (e) {
+        UI.toast("Erreur lors de l'ouverture du CV");
+      }
+    });
+  }
+
+  const cvDelete = $('#detail-cv-delete');
+  if (cvDelete) {
+    cvDelete.addEventListener('click', () => {
+      JobTracker.update((list) => list.map((item) => (item.id === c.id ? { ...item, cv: null } : item)), async (saved, list) => {
+        await CvStorage.delete(c.id);
+        state.list = list;
+        render();
+        UI.toast('CV retiré');
+      });
+    });
+  }
+
+  const cvUpload = $('#detail-cv-upload');
+  const cvInput = $('#detail-cv-input');
+  if (cvUpload && cvInput) {
+    cvUpload.addEventListener('click', () => cvInput.click());
+    cvInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const validation = JobTracker.validateCvFile(file);
+      if (!validation.valid) {
+        UI.toast(validation.error);
+        return;
+      }
+      const cvMeta = {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        updatedAt: JobTracker.todayISO()
+      };
+      JobTracker.update((list) => list.map((item) => (item.id === c.id ? { ...item, cv: cvMeta } : item)), async (saved, list) => {
+        await CvStorage.save(c.id, file);
+        state.list = list;
+        render();
+        UI.toast('CV rattaché');
+      });
+    });
+  }
 }
 
 // Rappel : chaque choix est enregistré immédiatement, comme le statut
@@ -394,6 +459,9 @@ function bindStatusMenu(id) {
 function openAdd(prefill, status = 'wishlist') {
   state.addPrefill = prefill;
   state.addStatus = status;
+  state.addCvFile = null;
+  state.addCvMeta = null;
+  delete $('#view-add').dataset.built;
   go('add');
 }
 
@@ -417,13 +485,63 @@ function renderAdd() {
     <form id="add-form" class="form-stack" novalidate>
       <label class="form-field">Poste *<input class="input" id="add-title" required value="${esc(p.title)}"></label>
       <label class="form-field">Entreprise *<input class="input" id="add-company" required value="${esc(p.company)}"></label>
-      <label class="form-field">Statut<select class="select" id="add-status">${options}</select></label>
-      <label class="form-field">Lieu<input class="input" id="add-location" value="${esc(p.location)}" placeholder="Paris, télétravail…"></label>
+      <div class="form-row">
+        <label class="form-field">Statut<select class="select" id="add-status">${options}</select></label>
+        <label class="form-field">Lieu<input class="input" id="add-location" value="${esc(p.location)}" placeholder="Paris, télétravail…"></label>
+      </div>
       <label class="form-field">Lien de l'offre<input class="input" id="add-url" type="url" value="${esc(p.url)}" placeholder="https://…"></label>
       <label class="form-field">Me rappeler${UI.reminderSelectHTML('add-reminder')}</label>
+      <div class="form-field">
+        <span>CV adapté</span>
+        <div id="add-cv-container"></div>
+      </div>
       <p id="add-error" class="form-error" role="alert"></p>
       <button type="submit" id="add-submit" class="btn btn--primary">Enregistrer</button>
     </form>`;
+
+  function renderAddCv() {
+    const container = $('#add-cv-container');
+    if (!container) return;
+    container.innerHTML = UI.cvFieldHTML('add-cv', state.addCvMeta);
+    UI.bindCvField(container, 'add-cv', {
+      onFileSelected: (file) => {
+        state.addCvFile = file;
+        state.addCvMeta = {
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          updatedAt: JobTracker.todayISO()
+        };
+        renderAddCv();
+        UI.toast('CV sélectionné');
+      },
+      onOpen: () => {
+        if (state.addCvFile) {
+          const url = URL.createObjectURL(state.addCvFile);
+          const isPdf = (state.addCvFile.type || '').includes('pdf') || state.addCvFile.name.toLowerCase().endsWith('.pdf');
+          if (isPdf && window.open) {
+            window.open(url, '_blank');
+          } else {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = state.addCvFile.name;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          }
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+        }
+      },
+      onDelete: () => {
+        state.addCvFile = null;
+        state.addCvMeta = null;
+        renderAddCv();
+        UI.toast('CV retiré');
+      }
+    });
+  }
+
+  renderAddCv();
 
   $('#add-back').addEventListener('click', () => go('list'));
   $('#add-form').addEventListener('submit', handleAdd);
@@ -447,16 +565,26 @@ function handleAdd(e) {
     location: $('#add-location').value.trim(),
     url: $('#add-url').value.trim(),
     reminderAt: UI.reminderFromPreset($('#add-reminder').value),
-    notes: "Ajouté depuis la popup de l'extension."
+    notes: "Ajouté depuis la popup de l'extension.",
+    cv: state.addCvMeta
   });
+
+  const fileToSave = state.addCvFile;
 
   JobTracker.update((list) => {
     if (JobTracker.isDuplicate(list, candidature)) return null;
     return [candidature, ...list];
-  }, (saved, list) => {
+  }, async (saved, list) => {
     if (!saved) {
       error.textContent = 'Cette offre est déjà dans votre suivi.';
       return;
+    }
+    if (fileToSave) {
+      try {
+        await CvStorage.save(candidature.id, fileToSave);
+      } catch (err) {
+        console.error('Erreur sauvegarde CV:', err);
+      }
     }
     state.list = list;
     go('detail', candidature.id);

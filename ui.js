@@ -68,11 +68,19 @@ var UI = globalThis.UI || (() => {
       .map((x) => x.c);
   }
 
+  const ICON_FILE = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>';
+
+  function cvTag(cv) {
+    if (!cv) return '';
+    return `<span class="tag tag--cv" title="CV : ${esc(cv.name || '')}">${ICON_FILE}CV</span>`;
+  }
+
   function jobItemHTML(c, { meta = ['company', 'location', 'relative'] } = {}) {
     const parts = meta
       .map((key) => (key === 'relative' ? relativeTime(c.dateApplied) : c[key]))
       .filter(Boolean)
       .map(esc);
+    if (c && c.cv) parts.push(cvTag(c.cv));
     return `<span class="job-item__title">${esc(c.title)}</span>` +
       `<span class="job-item__meta">${parts.join(' · ')}</span>` +
       statusTag(statusOf(c).id);
@@ -199,9 +207,102 @@ var UI = globalThis.UI || (() => {
     setTimeout(remove, duration);
   }
 
+  // --- CV : RENDU ET GESTION DES ÉVÉNEMENTS ---
+  function cvFieldHTML(idPrefix, cv) {
+    if (cv) {
+      const sizeStr = JobTracker.formatFileSize(cv.size);
+      return `<div class="cv-file-card" id="${idPrefix}-card">
+        <div class="cv-file-card__info">
+          <span class="cv-file-card__icon">${ICON_FILE}</span>
+          <div style="min-width:0;">
+            <div class="cv-file-card__name" title="${esc(cv.name)}">${esc(cv.name)}</div>
+            <div class="cv-file-card__meta">${esc(sizeStr)}</div>
+          </div>
+        </div>
+        <div class="cv-file-card__actions">
+          <button type="button" class="btn btn--secondary btn--sm" id="${idPrefix}-btn-open" title="Ouvrir ou télécharger">Ouvrir</button>
+          <button type="button" class="btn btn--ghost btn--sm" id="${idPrefix}-btn-replace" title="Remplacer le CV">Remplacer</button>
+          <button type="button" class="icon-btn icon-btn--sm" id="${idPrefix}-btn-delete" title="Supprimer le CV" aria-label="Supprimer le CV">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <input type="file" id="${idPrefix}-file-input" accept=".pdf,.doc,.docx" style="display:none;">
+      </div>`;
+    }
+    return `<div class="cv-dropzone" id="${idPrefix}-dropzone" role="button" tabindex="0" aria-label="Déposer un CV ou cliquer pour parcourir">
+      <span class="cv-dropzone__icon">${ICON_FILE}</span>
+      <span class="cv-dropzone__text">Glissez votre CV ou cliquez pour parcourir</span>
+      <span class="cv-dropzone__hint">Formats : .pdf, .doc, .docx (max 10 Mo)</span>
+      <input type="file" id="${idPrefix}-file-input" accept=".pdf,.doc,.docx" style="display:none;">
+    </div>`;
+  }
+
+  function bindCvField(root, idPrefix, { onFileSelected, onOpen, onDelete }) {
+    const fileInput = root.querySelector(`#${idPrefix}-file-input`);
+    const dropzone = root.querySelector(`#${idPrefix}-dropzone`);
+    const btnOpen = root.querySelector(`#${idPrefix}-btn-open`);
+    const btnReplace = root.querySelector(`#${idPrefix}-btn-replace`);
+    const btnDelete = root.querySelector(`#${idPrefix}-btn-delete`);
+
+    function handleFile(file) {
+      if (!file) return;
+      const validation = JobTracker.validateCvFile(file);
+      if (!validation.valid) {
+        toast(validation.error);
+        return;
+      }
+      if (onFileSelected) onFileSelected(file);
+    }
+
+    if (fileInput) {
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          handleFile(e.target.files[0]);
+        }
+      });
+    }
+
+    if (dropzone) {
+      dropzone.addEventListener('click', () => fileInput && fileInput.click());
+      dropzone.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          if (fileInput) fileInput.click();
+        }
+      });
+      dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('cv-dropzone--dragover');
+      });
+      dropzone.addEventListener('dragleave', () => {
+        dropzone.classList.remove('cv-dropzone--dragover');
+      });
+      dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('cv-dropzone--dragover');
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+          handleFile(e.dataTransfer.files[0]);
+        }
+      });
+    }
+
+    if (btnOpen) {
+      btnOpen.addEventListener('click', () => onOpen && onOpen());
+    }
+
+    if (btnReplace) {
+      btnReplace.addEventListener('click', () => fileInput && fileInput.click());
+    }
+
+    if (btnDelete) {
+      btnDelete.addEventListener('click', () => onDelete && onDelete());
+    }
+  }
+
   return {
     STATUSES, GROUPS, statusOf, statusTag, relativeTime, sortCandidatures, jobItemHTML, computeStats, toast,
-    REMINDER_PRESETS, formatReminder, formatReminderShort, reminderFromPreset, reminderFieldHTML, bindReminderField, reminderSelectHTML, readReminderInput, isValidFutureReminder
+    REMINDER_PRESETS, formatReminder, formatReminderShort, reminderFromPreset, reminderFieldHTML, bindReminderField, reminderSelectHTML, readReminderInput, isValidFutureReminder,
+    ICON_FILE, cvTag, cvFieldHTML, bindCvField
   };
 })();
 globalThis.UI = UI;

@@ -162,6 +162,7 @@ var JobTracker = globalThis.JobTracker || (() => {
       contactEmail: '',
       contactPhone: '',
       notes: '',
+      cv: null,
       ...fields
     };
   }
@@ -240,6 +241,36 @@ var JobTracker = globalThis.JobTracker || (() => {
       .replace(/'/g, '&#039;');
   }
 
+  // --- CV ---
+  const MAX_CV_SIZE = 10 * 1024 * 1024; // 10 Mo
+  const ALLOWED_CV_EXTENSIONS = ['.pdf', '.doc', '.docx'];
+
+  function validateCvFile(file) {
+    if (!file) return { valid: false, error: 'Aucun fichier sélectionné' };
+    const name = (file.name || '').toLowerCase();
+    const hasValidExt = ALLOWED_CV_EXTENSIONS.some((ext) => name.endsWith(ext));
+    if (!hasValidExt) {
+      return {
+        valid: false,
+        error: 'Format non supporté. Veuillez choisir un fichier .pdf, .doc ou .docx'
+      };
+    }
+    if (file.size > MAX_CV_SIZE) {
+      return {
+        valid: false,
+        error: 'Le fichier dépasse la limite autorisée de 10 Mo'
+      };
+    }
+    return { valid: true };
+  }
+
+  function formatFileSize(bytes) {
+    if (!bytes || bytes <= 0) return '0 o';
+    if (bytes < 1024) return `${bytes} o`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} Ko`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+  }
+
   return {
     getAll,
     saveAll,
@@ -260,7 +291,11 @@ var JobTracker = globalThis.JobTracker || (() => {
     dueReminders,
     nextReminderTime,
     snoozeValue,
-    escapeHTML
+    escapeHTML,
+    MAX_CV_SIZE,
+    ALLOWED_CV_EXTENSIONS,
+    validateCvFile,
+    formatFileSize
   };
 })();
 globalThis.JobTracker = JobTracker;

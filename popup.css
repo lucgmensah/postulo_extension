@@ -3,7 +3,8 @@
 
 body {
   width: 360px;
-  max-height: 580px;
+  height: 600px;
+  max-height: 600px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -58,11 +59,34 @@ body {
 .banner__tracked .tag { background: var(--color-surface); }
 
 /* --- FORMULAIRE D'AJOUT --- */
-.form-stack { display: grid; gap: var(--space-3); }
-.form-field { display: grid; gap: var(--space-1); font-size: 12px; font-weight: 600; color: var(--color-text-muted); }
-.form-field .input, .form-field .select { color: var(--color-text); font-weight: 500; }
-.form-error { margin: 0; color: var(--status-rejected-fg); font-size: 13px; font-weight: 600; }
+.form-stack { display: grid; gap: var(--space-2); }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+.form-field { display: grid; gap: 3px; font-size: 11px; font-weight: 600; color: var(--color-text-muted); }
+.form-field .input, .form-field .select {
+  height: 34px;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--color-text);
+  font-weight: 500;
+}
+.form-error { margin: 0; color: var(--status-rejected-fg); font-size: 12px; font-weight: 600; }
 .form-error:empty { display: none; }
+
+/* Zone CV compacte dans le popup */
+.popup-main .cv-dropzone {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  padding: 8px var(--space-3);
+  gap: var(--space-2);
+  min-height: 40px;
+}
+.popup-main .cv-dropzone__icon svg { width: 18px; height: 18px; flex-shrink: 0; }
+.popup-main .cv-dropzone__text { font-size: 12px; }
+.popup-main .cv-dropzone__hint { font-size: 10px; }
+.popup-main .cv-file-card { padding: 6px var(--space-3); }
+.popup-main .cv-file-card__name { font-size: 12px; }
+
 
 /* --- DÉTAIL --- */
 .detail-card { padding-top: var(--space-3); }

@@ -86,3 +86,30 @@ test('reminderFieldHTML : champ date + heure et 4 pastilles', () => {
   assert.match(html, />Demain 9 h</);
   assert.match(html, />Retirer</);
 });
+
+test('cvTag : retourne un tag avec le nom du fichier ou vide', () => {
+  assert.equal(UI.cvTag(null), '');
+  const tag = UI.cvTag({ name: 'mon_cv.pdf' });
+  assert.match(tag, /tag--cv/);
+  assert.match(tag, /mon_cv\.pdf/);
+});
+
+test('jobItemHTML : inclut le tag CV si présent', () => {
+  const withCv = UI.jobItemHTML({ title: 'Dev', company: 'Acme', cv: { name: 'cv.pdf' } });
+  assert.match(withCv, /tag--cv/);
+  const withoutCv = UI.jobItemHTML({ title: 'Dev', company: 'Acme' });
+  assert.ok(!withoutCv.includes('tag--cv'));
+});
+
+test('cvFieldHTML : état dropzone et état fichier rattaché', () => {
+  const dropzone = UI.cvFieldHTML('f-cv', null);
+  assert.match(dropzone, /cv-dropzone/);
+  assert.match(dropzone, /id="f-cv-dropzone"/);
+  assert.match(dropzone, /id="f-cv-file-input"/);
+
+  const card = UI.cvFieldHTML('f-cv', { name: 'cv_dev.pdf', size: 1024 });
+  assert.match(card, /cv-file-card/);
+  assert.match(card, /cv_dev\.pdf/);
+  assert.match(card, /id="f-cv-btn-open"/);
+  assert.match(card, /id="f-cv-btn-delete"/);
+});
