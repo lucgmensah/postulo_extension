@@ -9,12 +9,17 @@ const SHOTS = path.join(__dirname, 'screenshots');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function launch({ width = 1300, height = 900 } = {}) {
-  const browser = await puppeteer.launch({
+  const macChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || (fs.existsSync(macChrome) ? macChrome : undefined);
+  const launchOptions = {
     headless: false,
     pipe: true,
     enableExtensions: [ROOT],
     args: [`--window-size=${width},${height}`, '--lang=fr-FR']
-  });
+  };
+  if (executablePath) launchOptions.executablePath = executablePath;
+
+  const browser = await puppeteer.launch(launchOptions);
   const target = await browser.waitForTarget((t) => t.type() === 'service_worker', { timeout: 15000 });
   const extId = new URL(target.url()).host;
   // L'installation ouvre le dashboard : on le ferme pour partir d'un état connu

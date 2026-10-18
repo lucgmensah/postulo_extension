@@ -6,6 +6,7 @@
   "description": "Suivez vos candidatures simplement (Kanban, export CSV). Version bêta.",
   "permissions": [
     "storage",
+    "unlimitedStorage",
     "activeTab",
     "scripting",
     "alarms",

@@ -6,7 +6,9 @@ const state = {
   query: '',
   panelId: null, // id de la candidature ouverte, 'new' en création
   returnFocus: null, // sélecteur de l'élément à refocaliser à la fermeture
-  panelSnapshot: null // valeurs du panneau à l'ouverture
+  panelSnapshot: null, // valeurs du panneau à l'ouverture
+  panelCv: null, // métadonnées du CV rattaché
+  pendingCvFile: null // fichier binaire en attente d'enregistrement
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -97,6 +99,7 @@ function cardHTML(c) {
       <div class="kanban-card__company">${esc(c.company)}</div>
       <div class="kanban-card__footer">
         <span class="kanban-card__meta">${meta}</span>
+        ${c.cv ? UI.cvTag(c.cv) : ''}
         ${c.salary ? `<span class="tag tag--neutral">${esc(c.salary)}</span>` : ''}
       </div>
       ${reminderTagHTML(c.reminderAt)}
@@ -268,6 +271,71 @@ function focusSelector(el) {
   return el.id ? `#${el.id}` : null;
 }
 
+function renderPanelCv() {
+  const container = $('#f-cv');
+  if (!container) return;
+  container.innerHTML = UI.cvFieldHTML('f-cv', state.panelCv);
+  UI.bindCvField(container, 'f-cv', {
+    onFileSelected: (file) => {
+      state.pendingCvFile = file;
+      state.panelCv = {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        updatedAt: JobTracker.todayISO()
+      };
+      renderPanelCv();
+      UI.toast('CV sélectionné');
+    },
+    onOpen: async () => {
+      if (state.pendingCvFile) {
+        const url = URL.createObjectURL(state.pendingCvFile);
+        const isPdf = (state.pendingCvFile.type || '').includes('pdf') || state.pendingCvFile.name.toLowerCase().endsWith('.pdf');
+        if (isPdf && window.open) {
+          window.open(url, '_blank');
+        } else {
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = state.pendingCvFile.name;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        }
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      } else if (state.panelId && state.panelId !== 'new') {
+        try {
+          await CvStorage.openOrDownload(state.panelId, state.panelCv && state.panelCv.name);
+        } catch (err) {
+          UI.toast("Erreur lors de l'ouverture du CV");
+        }
+      }
+    },
+    onDelete: async () => {
+      const editId = state.panelId && state.panelId !== 'new' ? state.panelId : null;
+      state.pendingCvFile = null;
+      state.panelCv = null;
+      if (editId) {
+        try {
+          await CvStorage.delete(editId);
+        } catch (err) {
+          console.error('Erreur suppression CV IndexedDB:', err);
+        }
+        JobTracker.update((list) => {
+          return list.map((item) => (item.id === editId ? { ...item, cv: null } : item));
+        }, (saved, list) => {
+          state.list = list;
+          render();
+          renderPanelCv();
+          UI.toast('CV supprimé');
+        });
+      } else {
+        renderPanelCv();
+        UI.toast('CV retiré');
+      }
+    }
+  });
+}
+
 function openPanel({ id, status, returnFocus } = {}) {
   const existing = id ? state.list.find((c) => c.id === id) : null;
   if (id && !existing) {
@@ -275,9 +343,11 @@ function openPanel({ id, status, returnFocus } = {}) {
     return;
   }
 
-  const c = existing || { status: status || 'wishlist', dateApplied: JobTracker.todayISO() };
+  const c = existing || { status: status || 'wishlist', dateApplied: JobTracker.todayISO(), cv: null };
   state.panelId = existing ? existing.id : 'new';
   state.returnFocus = focusSelector(returnFocus || document.activeElement);
+  state.panelCv = c.cv ? { ...c.cv } : null;
+  state.pendingCvFile = null;
 
   $('#panel-heading').textContent = existing ? 'Modifier la candidature' : 'Nouvelle candidature';
   $('#panel-delete').classList.toggle('hidden', !existing);
@@ -288,6 +358,8 @@ function openPanel({ id, status, returnFocus } = {}) {
   }
   const statusId = UI.statusOf(c).id;
   document.querySelectorAll('.panel input[name="status"]').forEach((r) => { r.checked = r.value === statusId; });
+  renderPanelCv();
+
   // Valeurs à l'ouverture : à l'enregistrement, seuls les champs modifiés sont écrits,
   // pour ne pas écraser ce qui a changé ailleurs pendant l'édition.
   state.panelSnapshot = readPanelFields();
@@ -306,6 +378,8 @@ function closePanel() {
   panel.classList.add('hidden');
   backdrop.classList.add('hidden');
   state.panelId = null;
+  state.panelCv = null;
+  state.pendingCvFile = null;
   history.replaceState(null, '', location.pathname);
   const target = state.returnFocus && document.querySelector(state.returnFocus);
   if (target) target.focus();
@@ -350,8 +424,18 @@ function savePanel() {
   }
 
   const editId = state.panelId !== 'new' ? state.panelId : null;
-  const candidature = editId ? null : JobTracker.createCandidature(fields);
+  const candidature = editId ? null : JobTracker.createCandidature({ ...fields, cv: state.panelCv });
   const changes = Object.fromEntries(Object.entries(fields).filter(([k, v]) => v !== state.panelSnapshot[k]));
+
+  const existingItem = editId ? state.list.find((c) => c.id === editId) : null;
+  const existingCv = existingItem ? existingItem.cv : null;
+  const cvChanged = JSON.stringify(state.panelCv) !== JSON.stringify(existingCv);
+  if (cvChanged) {
+    changes.cv = state.panelCv;
+  }
+
+  const fileToSave = state.pendingCvFile;
+  const cvWasDeleted = editId && existingCv && !state.panelCv;
 
   JobTracker.update((list) => {
     if (!editId) return JobTracker.isDuplicate(list, fields) ? null : [candidature, ...list];
@@ -359,10 +443,24 @@ function savePanel() {
     const merged = { ...current, ...changes };
     if (!current || JobTracker.isDuplicate(list, merged, editId)) return null;
     return list.map((c) => (c.id === editId ? merged : c));
-  }, (saved, list) => {
+  }, async (saved, list) => {
     if (!saved) {
       UI.toast('Une candidature identique existe déjà.');
       return;
+    }
+    const targetId = editId || candidature.id;
+    if (fileToSave) {
+      try {
+        await CvStorage.save(targetId, fileToSave);
+      } catch (e) {
+        console.error('Erreur sauvegarde CV:', e);
+      }
+    } else if (cvWasDeleted) {
+      try {
+        await CvStorage.delete(targetId);
+      } catch (e) {
+        console.error('Erreur suppression CV:', e);
+      }
     }
     state.list = list;
     render();
@@ -372,11 +470,23 @@ function savePanel() {
 }
 
 // Suppression immédiate, annulable pendant 5 s (réinsertion à la position d'origine)
-function deleteCandidature(id) {
+async function deleteCandidature(id) {
   let removed = null;
-  // Fermer avant d'écrire : onChange peut arriver avant le retour de l'écriture
-  // et ne doit pas prendre cette suppression pour une suppression faite ailleurs.
   closePanel();
+
+  // Sauvegarde temporaire en mémoire pour restauration si "Annuler"
+  let cvBackupFile = null;
+  try {
+    const record = await CvStorage.get(id);
+    if (record && (record.file || record.blob)) {
+      cvBackupFile = record.file || record.blob;
+    }
+    // Suppression immédiate en base IndexedDB
+    await CvStorage.delete(id);
+  } catch (err) {
+    console.error('Erreur suppression CV IndexedDB :', err);
+  }
+
   JobTracker.update((list) => {
     const index = list.findIndex((c) => c.id === id);
     if (index === -1) return null;
@@ -386,34 +496,52 @@ function deleteCandidature(id) {
     state.list = list;
     render();
     if (!saved) return;
+
     UI.toast('Candidature supprimée', {
       actionLabel: 'Annuler',
       duration: 5000,
-      onAction: () => JobTracker.update((current) => {
-        if (current.some((c) => c.id === removed.item.id)) return null;
-        const next = current.slice();
-        next.splice(Math.min(removed.index, next.length), 0, removed.item);
-        return next;
-      }, (restored, restoredList) => {
-        state.list = restoredList;
-        render();
-      })
+      onAction: async () => {
+        // Restauration du fichier CV si présent
+        if (cvBackupFile) {
+          try {
+            await CvStorage.save(id, cvBackupFile);
+          } catch (err) {
+            console.error('Erreur restauration CV IndexedDB :', err);
+          }
+        }
+        JobTracker.update((current) => {
+          if (current.some((c) => c.id === removed.item.id)) return null;
+          const next = current.slice();
+          next.splice(Math.min(removed.index, next.length), 0, removed.item);
+          return next;
+        }, (restored, restoredList) => {
+          state.list = restoredList;
+          render();
+        });
+      }
     });
   });
 }
 
 // --- EXPORT CSV ---
 // Contenu CSV : séparateur point-virgule (Excel FR Windows)
-function buildCSV(list) {
+function buildCSV(list, zipPathMap = null) {
   const headers = [
     'Titre du Poste', 'Entreprise', 'Statut', 'Date Action / Envoi', 'Lieu', 'Salaire',
-    "Lien de l'offre", 'Contact Nom', 'Contact Email', 'Contact Telephone', 'Rappel', 'Notes'
+    "Lien de l'offre", 'Contact Nom', 'Contact Email', 'Contact Telephone', 'Rappel', 'CV adapté', 'Notes'
   ];
 
-  const rows = list.map((c) => [
-    c.title, c.company, UI.statusOf(c).label, c.dateApplied, c.location, c.salary,
-    c.url, c.contactName, c.contactEmail, c.contactPhone, (c.reminderAt || '').replace('T', ' '), c.notes
-  ]);
+  const rows = list.map((c) => {
+    let cvValue = (c.cv && c.cv.name) || '';
+    if (zipPathMap && zipPathMap.has(c.id)) {
+      cvValue = zipPathMap.get(c.id);
+    }
+    return [
+      c.title, c.company, UI.statusOf(c).label, c.dateApplied, c.location, c.salary,
+      c.url, c.contactName, c.contactEmail, c.contactPhone, (c.reminderAt || '').replace('T', ' '),
+      cvValue, c.notes
+    ];
+  });
 
   return [
     headers.join(';'),
@@ -427,20 +555,80 @@ function buildCSV(list) {
   ].join('\r\n');
 }
 
-function handleExportCSV() {
+async function handleExportCSV() {
   if (state.list.length === 0) {
     UI.toast('Aucune candidature à exporter.');
     return;
   }
 
-  // BOM UTF-8 pour qu'Excel Windows reconnaisse l'encodage
-  const blob = new Blob(['﻿' + buildCSV(state.list)], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `suivi_candidatures_${JobTracker.todayISO()}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  const candidaturesWithCv = state.list.filter((c) => c.cv);
+
+  // Si aucun CV rattaché, export direct du CSV seul
+  if (candidaturesWithCv.length === 0) {
+    const blob = new Blob(['﻿' + buildCSV(state.list)], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `suivi_candidatures_${JobTracker.todayISO()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    return;
+  }
+
+  // Si des CV sont présents : création de l'archive ZIP contenant le CSV + les CV
+  UI.toast("Préparation de l'archive ZIP...");
+  try {
+    const zip = new ZipBuilder();
+    const usedPaths = new Set();
+    const zipPathMap = new Map();
+
+    for (const c of candidaturesWithCv) {
+      let targetPath = JobTracker.buildCvZipPath(c);
+      if (usedPaths.has(targetPath)) {
+        const dot = targetPath.lastIndexOf('.');
+        const base = dot !== -1 ? targetPath.slice(0, dot) : targetPath;
+        const ext = dot !== -1 ? targetPath.slice(dot) : '';
+        let counter = 1;
+        while (usedPaths.has(`${base}_(${counter})${ext}`)) {
+          counter++;
+        }
+        targetPath = `${base}_(${counter})${ext}`;
+      }
+      usedPaths.add(targetPath);
+      zipPathMap.set(c.id, targetPath);
+    }
+
+    // 1. Ajouter le CSV à la racine du ZIP
+    const csvContent = '﻿' + buildCSV(state.list, zipPathMap);
+    zip.addFile(`suivi_candidatures_${JobTracker.todayISO()}.csv`, csvContent);
+
+    // 2. Ajouter les fichiers CV depuis IndexedDB
+    for (const c of candidaturesWithCv) {
+      const targetPath = zipPathMap.get(c.id);
+      const cvRecord = await CvStorage.get(c.id);
+      const fileData = cvRecord && (cvRecord.file || cvRecord.blob);
+      if (fileData) {
+        zip.addFile(targetPath, fileData);
+      }
+    }
+
+    // 3. Compiler et télécharger l'archive
+    const zipBlob = await zip.build();
+    const url = URL.createObjectURL(zipBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `suivi_candidatures_${JobTracker.todayISO()}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    UI.toast(`Export terminé (${candidaturesWithCv.length} CV inclus)`);
+  } catch (err) {
+    console.error("Erreur lors de l'export ZIP :", err);
+    UI.toast("Erreur lors de la création de l'archive d'export.");
+  }
 }
+
