@@ -36,6 +36,34 @@ async function ctrlClick(page, selector) {
   await page.keyboard.up('Control');
 }
 
+async function selectCards(page, ids) {
+  for (const id of ids) await ctrlClick(page, card(id));
+}
+
+const columnIds = (page, status) => page.$$eval(`.kanban-col[data-status="${status}"] .kanban-card`, (cards) => cards.map((c) => c.dataset.id));
+
+const todayLocal = () => {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+
+// Glisser-déposer HTML5 via des DragEvent synthétiques
+async function dragTo(page, id, status) {
+  await page.evaluate((id, status) => {
+    const from = document.querySelector(`.kanban-card[data-id="${id}"]`);
+    const to = document.querySelector(`.kanban-col[data-status="${status}"]`);
+    const dt = new DataTransfer();
+    const fire = (el, type) => el.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt }));
+    fire(from, 'dragstart');
+    fire(to, 'dragenter');
+    fire(to, 'dragover');
+    fire(to, 'drop');
+    fire(from, 'dragend');
+  }, id, status);
+  await sleep(300);
+}
+
 describe('Sélection - choisir des cartes', () => {
   test('Ctrl+clic coche une carte sans ouvrir le panneau', async () => {
     const page = await openDashboard();
@@ -178,6 +206,117 @@ describe('Sélection - choisir des cartes', () => {
     const page = await openDashboard();
     await page.click(card('s2'));
     assert.equal((await selection(page)).panel, true);
+    await page.close();
+  });
+});
+
+describe('Sélection - actions', () => {
+  test('changer le statut de la sélection', async () => {
+    const page = await openDashboard();
+    await selectCards(page, ['s4', 's5']);
+    await page.select('#selection-status', 'interview');
+    await sleep(400);
+    assert.deepEqual((await columnIds(page, 'interview')).sort(), ['s2', 's4', 's5']);
+    const store = await readStore(browser);
+    assert.deepEqual(store.filter((c) => ['s4', 's5'].includes(c.id)).map((c) => c.status), ['interview', 'interview']);
+    assert.match(await page.$eval('.toast', (t) => t.textContent), /2 candidatures passées en « Entretien »/);
+    assert.deepEqual((await selection(page)).ids.sort(), ['s4', 's5'], 'sélection perdue');
+    assert.equal(await page.$eval('#selection-status', (s) => s.value), '');
+    await page.close();
+  });
+
+  test('passer en « Candidature envoyée » renseigne la date du jour si elle manque', async () => {
+    const page = await openDashboard();
+    await selectCards(page, ['s5']);
+    await page.select('#selection-status', 'applied');
+    await sleep(400);
+    const s5 = (await readStore(browser)).find((c) => c.id === 's5');
+    assert.equal(s5.status, 'applied');
+    assert.equal(s5.dateApplied, todayLocal());
+    await page.close();
+  });
+
+  test('supprimer la sélection puis annuler', async () => {
+    const page = await openDashboard();
+    await selectCards(page, ['s2', 's4', 's6']);
+    await page.click('#selection-delete');
+    await sleep(400);
+    const ids = (await readStore(browser)).map((c) => c.id);
+    assert.ok(!ids.some((id) => ['s2', 's4', 's6'].includes(id)), ids.join(' '));
+    assert.match(await page.$eval('.toast', (t) => t.textContent), /3 candidatures supprimées/);
+    const s = await selection(page);
+    assert.deepEqual(s.ids, []);
+    assert.equal(s.bar, false);
+
+    await page.click('.toast__action');
+    await sleep(400);
+    assert.deepEqual((await readStore(browser)).map((c) => c.id), SAMPLE.map((c) => c.id));
+    assert.deepEqual(page.errors, []);
+    await page.close();
+  });
+
+  test('supprimer puis annuler restaure aussi les CV', async () => {
+    const withCv = SAMPLE.map((c) => (c.id === 's1' ? { ...c, cv: { name: 'cv.pdf', size: 3, type: 'application/pdf', updatedAt: '2026-11-01' } } : c));
+    const page = await openDashboard(withCv);
+    await page.evaluate(() => CvStorage.save('s1', new File(['pdf'], 'cv.pdf', { type: 'application/pdf' })));
+    await selectCards(page, ['s1', 's3']);
+    await page.click('#selection-delete');
+    await sleep(400);
+    assert.equal(await page.evaluate(async () => !!(await CvStorage.get('s1'))), false, 'CV toujours en base');
+    await page.click('.toast__action');
+    await sleep(400);
+    assert.equal(await page.evaluate(async () => (await CvStorage.get('s1')).name), 'cv.pdf');
+    await page.close();
+  });
+
+  test('exporter la sélection, puis tout depuis l\'en-tête', async () => {
+    const page = await openDashboard();
+    // Espionner l'export sans rien télécharger
+    await page.evaluate(() => {
+      const original = buildCSV;
+      window.buildCSV = (list, map) => {
+        window.__exported = list.map((c) => c.id);
+        return original(list, map);
+      };
+      HTMLAnchorElement.prototype.click = function () { window.__downloaded = this.download; };
+    });
+    await selectCards(page, ['s3', 's1']);
+    await page.click('#selection-export');
+    await sleep(200);
+    assert.deepEqual(await page.evaluate(() => window.__exported), ['s1', 's3']);
+    assert.match(await page.evaluate(() => window.__downloaded), /\.csv$/);
+    assert.deepEqual((await selection(page)).ids.sort(), ['s1', 's3'], 'sélection perdue');
+
+    await page.click('#selection-clear');
+    await page.click('#btn-export');
+    await sleep(200);
+    assert.equal((await page.evaluate(() => window.__exported)).length, SAMPLE.length);
+    await page.close();
+  });
+
+  test('glisser une carte cochée déplace toute la sélection ; une carte non cochée part seule', async () => {
+    const page = await openDashboard();
+    await selectCards(page, ['s4', 's5']);
+    await dragTo(page, 's4', 'interview');
+    assert.deepEqual((await columnIds(page, 'interview')).sort(), ['s2', 's4', 's5']);
+
+    await dragTo(page, 's1', 'offer');
+    assert.deepEqual((await columnIds(page, 'offer')).sort(), ['s1', 's6']);
+    assert.deepEqual((await columnIds(page, 'interview')).sort(), ['s2', 's4', 's5']);
+    await page.close();
+  });
+
+  test('les messages s\'affichent au-dessus de la barre', async () => {
+    const page = await openDashboard();
+    await selectCards(page, ['s4']);
+    await page.select('#selection-status', 'offer');
+    await page.waitForSelector('.toast');
+    const r = await page.evaluate(() => ({
+      toast: document.querySelector('.toast').getBoundingClientRect().bottom,
+      bar: document.querySelector('#selection-bar').getBoundingClientRect().top
+    }));
+    assert.ok(r.toast <= r.bar, JSON.stringify(r));
+    await shot(page, 'selection-toast');
     await page.close();
   });
 });

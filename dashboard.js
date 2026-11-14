@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderKanban();
   });
   $('#btn-add').addEventListener('click', () => openPanel({}));
-  $('#btn-export').addEventListener('click', handleExportCSV);
+  $('#btn-export').addEventListener('click', () => handleExportCSV(state.list));
 
   setupKanbanEvents();
   setupSelection();
@@ -188,6 +188,18 @@ function clearSelection() {
   syncSelection();
 }
 
+// La sélection reste cochée, pour enchaîner une autre action
+function changeStatusOfSelection(status) {
+  const ids = [...state.selected];
+  const label = UI.STATUSES.find((s) => s.id === status).label;
+  JobTracker.update((list) => JobTracker.applyStatusToIds(list, ids, status), (saved, list) => {
+    state.list = list;
+    render();
+    const count = list.filter((c) => ids.includes(c.id)).length;
+    UI.toast(count === 1 ? `Candidature passée en « ${label} »` : `${count} candidatures passées en « ${label} »`);
+  });
+}
+
 function setupSelection() {
   const kanban = $('.kanban');
 
@@ -206,7 +218,25 @@ function setupSelection() {
     }
   });
 
-  $('#selection-status').innerHTML += UI.STATUSES.map((s) => `<option value="${s.id}">${esc(s.label)}</option>`).join('');
+  const statusMenu = $('#selection-status');
+  statusMenu.innerHTML += UI.STATUSES.map((s) => `<option value="${s.id}">${esc(s.label)}</option>`).join('');
+  statusMenu.addEventListener('change', () => {
+    const status = statusMenu.value;
+    statusMenu.value = '';
+    if (status) changeStatusOfSelection(status);
+  });
+
+  $('#selection-export').addEventListener('click', () => {
+    handleExportCSV(state.list.filter((c) => state.selected.has(c.id)));
+  });
+
+  // La sélection se vide : les cartes supprimées ne sont plus là, et « Annuler »
+  // les fait revenir sans les recocher.
+  $('#selection-delete').addEventListener('click', () => {
+    const ids = [...state.selected];
+    clearSelection();
+    deleteCandidatures(ids);
+  });
 
   $('#selection-clear').addEventListener('click', () => {
     const back = state.lastToggled && document.querySelector(`.kanban-card[data-id="${CSS.escape(state.lastToggled)}"]`);
@@ -260,29 +290,33 @@ function setupKanbanEvents() {
   });
 
   // --- GLISSER-DÉPOSER ---
-  let draggedId = null;
+  // Une carte cochée emporte toute la sélection ; une carte non cochée part seule.
+  let draggedIds = null;
 
   kanban.addEventListener('dragstart', (e) => {
     const card = e.target.closest('.kanban-card');
     if (!card) return;
-    draggedId = card.dataset.id;
-    card.classList.add('kanban-card--dragging');
+    const id = card.dataset.id;
+    draggedIds = state.selected.has(id) ? [...state.selected] : [id];
+    for (const dragged of draggedIds) {
+      const el = kanban.querySelector(`.kanban-card[data-id="${CSS.escape(dragged)}"]`);
+      if (el) el.classList.add('kanban-card--dragging');
+    }
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', draggedId);
+      e.dataTransfer.setData('text/plain', id);
     }
   });
 
-  kanban.addEventListener('dragend', (e) => {
-    const card = e.target.closest('.kanban-card');
-    if (card) card.classList.remove('kanban-card--dragging');
+  kanban.addEventListener('dragend', () => {
+    kanban.querySelectorAll('.kanban-card--dragging').forEach((c) => c.classList.remove('kanban-card--dragging'));
     kanban.querySelectorAll('.kanban-col--drop').forEach((c) => c.classList.remove('kanban-col--drop'));
-    draggedId = null;
+    draggedIds = null;
   });
 
   kanban.addEventListener('dragover', (e) => {
     const col = e.target.closest('.kanban-col');
-    if (!col || !draggedId) return;
+    if (!col || !draggedIds) return;
     e.preventDefault();
     kanban.querySelectorAll('.kanban-col--drop').forEach((c) => c !== col && c.classList.remove('kanban-col--drop'));
     col.classList.add('kanban-col--drop');
@@ -295,12 +329,12 @@ function setupKanbanEvents() {
 
   kanban.addEventListener('drop', (e) => {
     const col = e.target.closest('.kanban-col');
-    if (!col || !draggedId) return;
+    if (!col || !draggedIds) return;
     e.preventDefault();
     col.classList.remove('kanban-col--drop');
-    const id = draggedId;
+    const ids = draggedIds;
     const status = col.dataset.status;
-    JobTracker.update((list) => list.map((c) => (c.id === id ? JobTracker.applyStatus(c, status) : c)), (saved, list) => {
+    JobTracker.update((list) => JobTracker.applyStatusToIds(list, ids, status), (saved, list) => {
       state.list = list;
       render();
     });
@@ -661,17 +695,18 @@ function buildCSV(list, zipPathMap = null) {
   ].join('\r\n');
 }
 
-async function handleExportCSV() {
-  if (state.list.length === 0) {
+// Exporte `list` : tout le suivi (bouton de l'en-tête) ou la sélection (barre d'actions)
+async function handleExportCSV(list) {
+  if (list.length === 0) {
     UI.toast('Aucune candidature à exporter.');
     return;
   }
 
-  const candidaturesWithCv = state.list.filter((c) => c.cv);
+  const candidaturesWithCv = list.filter((c) => c.cv);
 
   // Si aucun CV rattaché, export direct du CSV seul
   if (candidaturesWithCv.length === 0) {
-    const blob = new Blob(['﻿' + buildCSV(state.list)], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob(['﻿' + buildCSV(list)], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -707,7 +742,7 @@ async function handleExportCSV() {
     }
 
     // 1. Ajouter le CSV à la racine du ZIP
-    const csvContent = '﻿' + buildCSV(state.list, zipPathMap);
+    const csvContent = '﻿' + buildCSV(list, zipPathMap);
     zip.addFile(`suivi_candidatures_${JobTracker.todayISO()}.csv`, csvContent);
 
     // 2. Ajouter les fichiers CV depuis IndexedDB
