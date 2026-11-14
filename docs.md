@@ -2,13 +2,13 @@
 
 ## Description courte
 
-> Enregistrez une offre en un clic sur LinkedIn, Indeed ou Welcome to the Jungle, suivez vos candidatures et recevez vos rappels.
+> Enregistrez une offre en un clic sur LinkedIn, Indeed, Hello Work et d'autres, suivez vos candidatures et recevez vos rappels.
 
 ## Description
 
 Chercher un emploi, c'est souvent des dizaines d'offres ouvertes dans des onglets, un tableur oublié et des relances qui passent à la trappe. **Postulo** remet de l'ordre dans votre recherche, directement dans votre navigateur.
 
-Quand vous consultez une offre sur LinkedIn, Indeed ou Welcome to the Jungle, un bouton **« Suivre cette offre »** apparaît en bas de la page. Un clic suffit : le poste, l'entreprise et le lieu sont déjà remplis. L'offre rejoint votre tableau de suivi, et vous passez à la suivante.
+Quand vous consultez une offre sur LinkedIn, Indeed, Welcome to the Jungle, Hello Work ou France Travail, un bouton **« Suivre cette offre »** apparaît en bas de la page. Un clic suffit : le poste, l'entreprise et le lieu sont déjà remplis. L'offre rejoint votre tableau de suivi, et vous passez à la suivante.
 
 Toutes vos candidatures se retrouvent sur un **tableau Kanban** clair, de « À postuler » à « Offre reçue ». Faites glisser une carte pour la faire avancer, ouvrez-la pour noter un contact, un salaire ou la préparation d'un entretien. En haut, vos statistiques vous montrent où vous en êtes : candidatures envoyées, entretiens obtenus, taux de réponse.
 
@@ -16,7 +16,7 @@ Vous voulez postuler plus tard ou relancer un recruteur dans une semaine ? Posez
 
 ## Ce que Postulo vous apporte
 
-- **Un clic pour enregistrer une offre.** Sur LinkedIn, Indeed et Welcome to the Jungle, l'offre est reconnue et ses informations sont pré-remplies. Sur les autres sites, la fenêtre de l'extension reprend le titre et le lien de la page.
+- **Un clic pour enregistrer une offre.** Sur LinkedIn, Indeed, Welcome to the Jungle, Hello Work, France Travail, Cadremploi, JobTeaser et Free-Work, l'offre est reconnue et ses informations sont pré-remplies. Sur les autres sites, la fenêtre de l'extension reprend le titre et le lien de la page, et souvent l'entreprise et le lieu.
 - **Fini les doublons.** L'extension vous signale une offre que vous suivez déjà, avec son statut actuel.
 - **Une vue d'ensemble en un coup d'œil.** Tableau Kanban en cinq étapes, recherche instantanée, statistiques et taux de réponse.
 - **Toutes les informations au même endroit.** Lien de l'offre, salaire, lieu, contact du recruteur (nom, e-mail, téléphone) et notes de suivi.
@@ -40,7 +40,7 @@ Postulo fonctionne **sans compte et sans serveur**. Vos candidatures sont enregi
 Oui. Postulo est gratuite et open source.
 
 **Quels sites sont compatibles ?**
-LinkedIn, Indeed et Welcome to the Jungle sont reconnus automatiquement. Sur tous les autres sites, vous pouvez ajouter une offre depuis l'icône de l'extension : le titre et le lien de la page sont repris.
+LinkedIn, Indeed, Welcome to the Jungle, Hello Work, France Travail, Cadremploi, JobTeaser et Free-Work sont reconnus automatiquement. Sur tous les autres sites, vous pouvez ajouter une offre depuis l'icône de l'extension : le titre et le lien de la page sont repris, ainsi que l'entreprise et le lieu quand le site les publie sous une forme standard.
 
 **Mes données sont-elles synchronisées entre mes ordinateurs ?**
 Non. Elles restent dans le navigateur où vous les avez saisies. Pour les conserver ou les transférer, utilisez l'export CSV.

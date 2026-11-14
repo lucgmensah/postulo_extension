@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Postulo - Suivi de candidatures (Bêta)",
   "short_name": "Postulo",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Suivez vos candidatures simplement (Kanban, export CSV). Version bêta.",
   "permissions": [
     "storage",
