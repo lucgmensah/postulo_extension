@@ -19,6 +19,7 @@ Vous voulez postuler plus tard ou relancer un recruteur dans une semaine ? Posez
 - **Un clic pour enregistrer une offre.** Sur LinkedIn, Indeed, Welcome to the Jungle, Hello Work, France Travail, Cadremploi, JobTeaser et Free-Work, l'offre est reconnue et ses informations sont pré-remplies. Sur les autres sites, la fenêtre de l'extension reprend le titre et le lien de la page, et souvent l'entreprise et le lieu.
 - **Fini les doublons.** L'extension vous signale une offre que vous suivez déjà, avec son statut actuel.
 - **Une vue d'ensemble en un coup d'œil.** Tableau Kanban en cinq étapes, recherche instantanée, statistiques et taux de réponse.
+- **Faire le ménage en quelques clics.** Cochez plusieurs candidatures pour changer leur statut, les exporter ou les supprimer d'un coup. Une suppression s'annule pendant quelques secondes.
 - **Toutes les informations au même endroit.** Lien de l'offre, salaire, lieu, contact du recruteur (nom, e-mail, téléphone) et notes de suivi.
 - **Des rappels qui tombent au bon moment.** « Demain 9 h », « Dans 3 jours », « Dans 1 semaine », ou la date et l'heure de votre choix. La notification s'adapte : postuler, relancer, préparer un entretien.
 - **Accessible partout dans le navigateur.** Depuis l'icône de l'extension, consultez vos candidatures par avancement (À faire, En cours, Terminées), changez un statut ou ajoutez une offre sans quitter la page.

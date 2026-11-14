@@ -20,6 +20,7 @@ Extension Chrome open source pour suivre ses candidatures : enregistrement d'off
   - Kanban en cinq colonnes avec glisser-déposer ;
   - panneau de détail modifiable ;
   - suppression annulable ;
+  - sélection multiple (case au survol, Ctrl+clic, case de colonne) pour changer le statut, exporter ou supprimer plusieurs candidatures à la fois ;
   - recherche ;
   - export CSV compatible Excel.
 - **Rappels** : date et heure sur n'importe quelle candidature, notification du navigateur à l'heure prévue (ou au démarrage suivant si le navigateur était fermé), avec les actions « Ouvrir l'offre » et « Reporter à demain ».
