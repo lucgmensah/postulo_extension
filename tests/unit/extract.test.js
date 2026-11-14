@@ -153,6 +153,17 @@ test('resolve : secours du titre de page, nom du site retiré de l\'entreprise',
   assert.deepEqual(r, { success: true, confident: false, title: 'Dév', company: '', location: '' });
 });
 
+test('resolve : le nom du site n\'est jamais pris pour l\'entreprise', () => {
+  const names = ['hellowork', 'hello work'];
+  const base = { posting: null, found: { title: 'Dév' }, names, isJobPage: true };
+  // og:site_name vaut parfois l'adresse du site
+  assert.equal(E.resolve({ ...base, fallback: { company: 'www.hellowork.com' } }).company, '');
+  assert.equal(E.resolve({ ...base, fallback: { company: 'Acme' } }).company, 'Acme');
+  // Une entreprise lue sur l'offre garde son nom, même s'il contient celui du site
+  assert.equal(E.resolve({ ...base, found: { title: 'Dév', company: 'Hellowork Group' }, fallback: {} }).company, 'Hellowork Group');
+  assert.equal(E.resolve({ ...base, found: { title: 'Dév', company: 'HelloWork' }, fallback: {} }).company, '');
+});
+
 test('resolve : la fiche passe avant les repères, champ par champ', () => {
   const r = E.resolve({
     posting: { '@type': 'JobPosting', title: 'Dév Java', hiringOrganization: { name: 'Acme' } },

@@ -160,7 +160,7 @@ async function detectCurrentOffer() {
     // Script absent (onglet ouvert avant l'installation, site non déclaré) : l'injecter
     const injected = await new Promise((resolve) => {
       chrome.scripting.executeScript(
-        { target: { tabId: tab.id }, files: ['shared.js', 'ui.js', 'content.js'] },
+        { target: { tabId: tab.id }, files: ['shared.js', 'extract.js', 'ui.js', 'content.js'] },
         () => resolve(!chrome.runtime.lastError)
       );
     });

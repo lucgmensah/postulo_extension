@@ -92,4 +92,47 @@ async function waitForTab(browser, predicate, timeout = 10000) {
   return target.url();
 }
 
-module.exports = { ROOT, sleep, launch, worker, seed, readStore, openExtPage, shot, findLinkedInJobUrl, waitForTab };
+// --- PAGES ENREGISTRÉES (tests hors ligne) ---
+// tests/e2e/pages/ contient de vraies pages d'offre, réduites à l'en-tête et à la fiche JSON-LD.
+const PAGES = path.join(__dirname, 'pages');
+
+function readPage(name, { sansFiche = false } = {}) {
+  const html = fs.readFileSync(path.join(PAGES, `${name}.html`), 'utf8');
+  return sansFiche ? html.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/g, '') : html;
+}
+
+// Sert `html` à la place du document demandé : la page porte l'adresse réelle du site,
+// donc le script de contenu s'y exécute, sans aucun accès au réseau.
+async function serveFixture(page, html) {
+  await page.setRequestInterception(true);
+  page.on('request', (req) => {
+    if (req.isNavigationRequest() && req.frame() === page.mainFrame()) {
+      req.respond({ status: 200, contentType: 'text/html; charset=utf-8', body: html });
+    } else if (req.url().startsWith('chrome-extension://')) {
+      req.continue();
+    } else {
+      req.abort();
+    }
+  });
+}
+
+// Ouvre le panneau « Suivre cette offre » et lit ses champs. null si le widget n'apparaît pas.
+async function widgetFields(page, timeout = 15000) {
+  const end = Date.now() + timeout;
+  while (Date.now() < end) {
+    const fields = await page.evaluate(() => {
+      const host = document.getElementById('job-tracker-floating-root');
+      const root = host && host.shadowRoot;
+      const panel = root && root.querySelector('.wt-form');
+      if (!panel) return null;
+      if (root.querySelector('.wt-panel').classList.contains('hidden')) root.querySelector('.wt-pill').click();
+      const value = (id) => root.getElementById(id).value;
+      return { title: value('wt-title'), company: value('wt-company'), location: value('wt-location') };
+    });
+    if (fields) return fields;
+    await sleep(250);
+  }
+  return null;
+}
+
+module.exports = { ROOT, sleep, launch, worker, seed, readStore, openExtPage, shot, findLinkedInJobUrl, waitForTab, readPage, serveFixture, widgetFields };
