@@ -163,6 +163,7 @@ function syncSelection() {
 
   const bar = $('#selection-bar');
   bar.classList.toggle('hidden', count === 0);
+  if (count === 0) closeStatusMenu();
   $('#selection-count').textContent = count === 1 ? '1 sélectionnée' : `${count} sélectionnées`;
   // Les messages (toasts) remontent au-dessus de la barre
   document.body.style.setProperty('--selection-bar-height', count > 0 ? `${bar.offsetHeight}px` : '0px');
@@ -200,6 +201,56 @@ function changeStatusOfSelection(status) {
   });
 }
 
+// --- MENU « CHANGER LE STATUT » (même fonctionnement que celui de la popup) ---
+// Rien n'est appliqué tant qu'un statut n'est pas choisi (clic ou Entrée).
+function onStatusMenuOutside(e) {
+  if (!$('#selection-status-menu').contains(e.target) && !$('#selection-status').contains(e.target)) closeStatusMenu();
+}
+
+function closeStatusMenu() {
+  $('#selection-status-menu').classList.add('hidden');
+  $('#selection-status').setAttribute('aria-expanded', 'false');
+  document.removeEventListener('click', onStatusMenuOutside, true);
+}
+
+function setupStatusMenu() {
+  const trigger = $('#selection-status');
+  const menu = $('#selection-status-menu');
+  menu.innerHTML = UI.STATUSES
+    .map((s) => `<button type="button" role="menuitem" data-status="${s.id}" tabindex="-1" aria-label="${esc(s.label)}">${UI.statusTag(s.id)}</button>`)
+    .join('');
+  const items = () => [...menu.querySelectorAll('[role="menuitem"]')];
+
+  trigger.addEventListener('click', () => {
+    if (!menu.classList.contains('hidden')) {
+      closeStatusMenu();
+      return;
+    }
+    menu.classList.remove('hidden');
+    trigger.setAttribute('aria-expanded', 'true');
+    document.addEventListener('click', onStatusMenuOutside, true);
+    items()[0].focus();
+  });
+
+  menu.addEventListener('keydown', (e) => {
+    const list = items();
+    const i = list.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); list[(i + 1) % list.length].focus(); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); list[(i - 1 + list.length) % list.length].focus(); }
+    if (e.key === 'Tab') closeStatusMenu();
+    // preventDefault : Échap ferme le menu sans vider la sélection
+    if (e.key === 'Escape') { e.preventDefault(); closeStatusMenu(); trigger.focus(); }
+  });
+
+  menu.addEventListener('click', (e) => {
+    const item = e.target.closest('[role="menuitem"]');
+    if (!item) return;
+    closeStatusMenu();
+    trigger.focus();
+    changeStatusOfSelection(item.dataset.status);
+  });
+}
+
 function setupSelection() {
   const kanban = $('.kanban');
 
@@ -218,13 +269,7 @@ function setupSelection() {
     }
   });
 
-  const statusMenu = $('#selection-status');
-  statusMenu.innerHTML += UI.STATUSES.map((s) => `<option value="${s.id}">${esc(s.label)}</option>`).join('');
-  statusMenu.addEventListener('change', () => {
-    const status = statusMenu.value;
-    statusMenu.value = '';
-    if (status) changeStatusOfSelection(status);
-  });
+  setupStatusMenu();
 
   $('#selection-export').addEventListener('click', () => {
     handleExportCSV(state.list.filter((c) => state.selected.has(c.id)));

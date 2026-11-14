@@ -36,9 +36,15 @@
   <!-- ACTIONS SUR LA SÉLECTION -->
   <div id="selection-bar" class="selection-bar hidden" role="toolbar" aria-label="Actions sur la sélection">
     <span id="selection-count" class="selection-bar__count" aria-live="polite"></span>
-    <select id="selection-status" class="select selection-bar__status" aria-label="Changer le statut de la sélection">
-      <option value="">Changer le statut…</option>
-    </select>
+    <!-- Un menu plutôt qu'une liste déroulante : sous Windows, chaque flèche du clavier
+         sur une liste fermée appliquerait aussitôt un statut à toute la sélection. -->
+    <div class="status-picker">
+      <button type="button" id="selection-status" class="btn btn--secondary btn--sm" aria-haspopup="menu" aria-expanded="false" aria-controls="selection-status-menu">
+        Changer le statut
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
+      </button>
+      <div id="selection-status-menu" class="status-menu status-menu--up hidden" role="menu" aria-label="Choisir un statut"></div>
+    </div>
     <button type="button" id="selection-export" class="btn btn--secondary btn--sm">Exporter</button>
     <button type="button" id="selection-delete" class="btn btn--danger btn--sm">Supprimer</button>
     <button type="button" id="selection-clear" class="icon-btn icon-btn--sm" aria-label="Tout désélectionner" title="Tout désélectionner (Échap)">

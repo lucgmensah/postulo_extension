@@ -429,3 +429,30 @@ button.tag { cursor: pointer; }
   gap: var(--space-1);
   flex-shrink: 0;
 }
+
+/* --- MENU DE STATUT (popup, barre de sélection du dashboard) --- */
+.status-picker { position: relative; }
+.status-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 10;
+  display: grid;
+  gap: 2px;
+  padding: var(--space-1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-field);
+  box-shadow: 0 8px 24px rgba(27, 27, 58, 0.12);
+}
+.status-menu--up { top: auto; bottom: calc(100% + 6px); }
+.status-menu.hidden { display: none; }
+.status-menu [role="menuitem"] {
+  display: flex;
+  padding: 6px var(--space-2);
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+}
+.status-menu [role="menuitem"]:hover, .status-menu [role="menuitem"]:focus-visible { background: var(--color-bg); }
