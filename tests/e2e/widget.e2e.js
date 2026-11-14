@@ -1,8 +1,12 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { launch, seed, readStore, shot, findLinkedInJobUrl, waitForTab, sleep } = require('./harness');
+const { launch, seed, readStore, shot, waitForTab, sleep, readPage, serveFixture } = require('./harness');
 
-let browser, jobUrl, page;
+// Vraie offre LinkedIn enregistrée, servie hors ligne à son adresse (voir harness.serveFixture).
+// Une page en ligne redirige vers la connexion après quelques rechargements.
+const jobUrl = 'https://fr.linkedin.com/jobs/view/developpeur-java-h-f-at-devoteam-4368990276';
+
+let browser, page;
 
 // Attend le widget (hôte + bouton visible) et renvoie un résumé de son état
 async function widgetState(p, timeout = 15000) {
@@ -41,9 +45,9 @@ async function waitWidget(p, predicate, timeout = 5000) {
 
 before(async () => {
   ({ browser } = await launch());
-  jobUrl = await findLinkedInJobUrl(browser);
   page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800 });
+  await serveFixture(page, readPage('linkedin'));
   await page.goto(jobUrl, { waitUntil: 'load', timeout: 60000 });
 });
 after(async () => browser && browser.close());

@@ -51,8 +51,12 @@
       // trouvée ailleurs (page de recherche, page d'entreprise) ne suffit pas.
       const key = isJobPage && details.success ? JobTracker.jobKey(details.url) : null;
 
-      // Si l'URL correspond à une offre mais que le DOM (React) n'a pas encore fini de charger les détails
-      if (isJobPage && !key && retryCount < MAX_RETRIES) {
+      // Déjà affiché pour cette offre
+      if (key && key === currentKey) return;
+
+      // L'URL est celle d'une offre mais la page n'a pas fini de l'afficher : tant que le
+      // poste ne vient que du titre de la page, on réessaie avant de s'en contenter.
+      if (isJobPage && (!key || !details.confident) && retryCount < MAX_RETRIES) {
         retryCount += 1;
         scheduleRefresh(800);
         return;
@@ -471,7 +475,31 @@
     const success = shadow.querySelector('.wt-success');
     const formEl = shadow.querySelector('.wt-form');
 
+    // Valeurs posées automatiquement. Le widget est créé tôt : la page a pu finir de
+    // s'afficher depuis, ou changer d'offre sans se recharger. Elle est donc relue à
+    // chaque ouverture du panneau ; un champ modifié à la main n'est plus touché.
+    const auto = { title: details.title, company: details.company, location: details.location };
+    function rereadPage() {
+      let fresh;
+      try {
+        fresh = scrapeJobDetails();
+      } catch (e) {
+        return;
+      }
+      if (!fresh.success || JobTracker.jobKey(fresh.url) !== currentKey) return;
+      for (const field of Object.keys(auto)) {
+        // Un poste tiré du titre de la page ne remplace pas ce qui est déjà là
+        if (field === 'title' && !fresh.confident) continue;
+        const input = shadow.getElementById(`wt-${field}`);
+        if (fresh[field] && input.value === auto[field]) {
+          input.value = fresh[field];
+          auto[field] = fresh[field];
+        }
+      }
+    }
+
     pill.addEventListener('click', () => {
+      rereadPage();
       pill.classList.add('hidden');
       panel.classList.remove('hidden');
       shadow.getElementById('wt-title').focus();
