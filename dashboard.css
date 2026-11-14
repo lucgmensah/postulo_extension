@@ -162,6 +162,100 @@ body { min-height: 100vh; overflow-x: hidden; }
 
 .kanban-col__empty { padding: var(--space-4) var(--space-2); text-align: center; font-size: 12px; color: var(--color-text-muted); }
 
+/* --- SÉLECTION MULTIPLE --- */
+/* Les cases n'apparaissent qu'au survol, au focus ou pendant une sélection */
+.kanban-card { position: relative; }
+.kanban-card__title { padding-right: 22px; }
+.kanban-card__check,
+.kanban-col__check {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+.kanban-card__check { position: absolute; top: 12px; right: 12px; }
+
+/* La case de colonne prend la place de la pastille de couleur : elle n'ajoute
+   aucune largeur à l'en-tête, dont le titre serait sinon tronqué. */
+.kanban-col__lead {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 8px; /* largeur de la pastille : pas un pixel de plus, sinon « Candidature envoyée » est tronqué */
+  height: 16px;
+}
+.kanban-col__lead .kanban-col__check {
+  width: 14px;
+  height: 14px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.kanban-card:hover .kanban-card__check,
+.kanban-card:focus-within .kanban-card__check,
+.kanban-col__header:hover .kanban-col__check,
+.kanban-col__check:focus-visible,
+.kanban--selecting .kanban-card__check,
+.kanban--selecting .kanban-col__check { opacity: 1; }
+
+.kanban-col__header:hover .kanban-col__lead:has(.kanban-col__check) .kanban-col__dot,
+.kanban-col__lead:focus-within .kanban-col__dot,
+.kanban--selecting .kanban-col__lead:has(.kanban-col__check) .kanban-col__dot { opacity: 0; }
+
+/* Écrans tactiles : pas de survol, les cases restent visibles */
+@media (hover: none) {
+  .kanban-card__check, .kanban-col__check { opacity: 1; }
+  .kanban-col__lead:has(.kanban-col__check) .kanban-col__dot { opacity: 0; }
+}
+
+.kanban-card--selected,
+.kanban-card--selected:hover {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.selection-bar {
+  position: fixed;
+  left: 50%;
+  bottom: var(--space-5);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: calc(100vw - 2 * var(--space-4));
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: 0 12px 32px rgba(27, 27, 58, 0.16);
+  z-index: 40; /* sous le voile du panneau (50) */
+  animation: selection-bar-in var(--transition-normal);
+}
+.selection-bar__count {
+  margin-right: var(--space-2);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.selection-bar__status { width: auto; padding-top: 5px; padding-bottom: 5px; font-size: 12px; }
+
+@keyframes selection-bar-in {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+}
+
+/* Les messages s'affichent au-dessus de la barre */
+body.has-selection .toast-region {
+  bottom: calc(var(--space-5) + var(--selection-bar-height, 0px) + var(--space-3));
+}
+
 /* --- RESPONSIVE --- */
 @media (max-width: 1100px) {
   .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -171,6 +265,13 @@ body { min-height: 100vh; overflow-x: hidden; }
   .app-main { padding: var(--space-4); }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .search .input { width: 160px; }
+  .selection-bar {
+    left: var(--space-4);
+    right: var(--space-4);
+    transform: none;
+    flex-wrap: wrap;
+    animation: none;
+  }
 }
 
 /* --- PANNEAU DE DÉTAIL --- */

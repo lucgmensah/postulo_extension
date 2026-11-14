@@ -8,7 +8,9 @@ const state = {
   returnFocus: null, // sélecteur de l'élément à refocaliser à la fermeture
   panelSnapshot: null, // valeurs du panneau à l'ouverture
   panelCv: null, // métadonnées du CV rattaché
-  pendingCvFile: null // fichier binaire en attente d'enregistrement
+  pendingCvFile: null, // fichier binaire en attente d'enregistrement
+  selected: new Set(), // ids des cartes cochées (toujours visibles à l'écran)
+  lastToggled: null // dernière carte cochée ou décochée, pour y rendre le focus
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -33,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#btn-export').addEventListener('click', handleExportCSV);
 
   setupKanbanEvents();
+  setupSelection();
   setupPanel();
 
   JobTracker.getAll((list) => {
@@ -95,6 +98,7 @@ function cardHTML(c) {
   const meta = [c.location, UI.relativeTime(c.dateApplied)].filter(Boolean).map(esc).join(' · ');
   return `
     <article class="kanban-card" data-id="${esc(c.id)}" draggable="true" tabindex="0" aria-label="${esc(c.title)} - ${esc(c.company)}">
+      <input type="checkbox" class="kanban-card__check" aria-label="Sélectionner ${esc(c.title)}">
       <div class="kanban-card__title">${esc(c.title)}</div>
       <div class="kanban-card__company">${esc(c.company)}</div>
       <div class="kanban-card__footer">
@@ -113,7 +117,10 @@ function renderKanban() {
     return `
       <section class="kanban-col" data-status="${s.id}" aria-label="${esc(s.label)}">
         <header class="kanban-col__header">
-          <span class="kanban-col__dot" style="background: var(--status-${s.id}-fg)" aria-hidden="true"></span>
+          <span class="kanban-col__lead">
+            <span class="kanban-col__dot" style="background: var(--status-${s.id}-fg)" aria-hidden="true"></span>
+            ${cards.length ? `<input type="checkbox" class="kanban-col__check" aria-label="Sélectionner toute la colonne ${esc(s.label)}" title="Sélectionner toute la colonne">` : ''}
+          </span>
           <h2 class="kanban-col__title">${esc(s.label)}</h2>
           <span class="kanban-col__count">${cards.length}</span>
           <button type="button" class="icon-btn kanban-col__add" aria-label="Ajouter dans ${esc(s.label)}" title="Ajouter dans ${esc(s.label)}">${ICONS.plus}</button>
@@ -123,6 +130,97 @@ function renderKanban() {
         </div>
       </section>`;
   }).join('');
+
+  // Ce qu'on voit est ce qu'on touche : une carte masquée (recherche) ou supprimée
+  // (ailleurs) sort de la sélection.
+  const shown = new Set(visible.map((c) => c.id));
+  state.selected = new Set([...state.selected].filter((id) => shown.has(id)));
+  syncSelection();
+}
+
+// --- SÉLECTION ---
+// Cocher une carte ne redessine pas le Kanban : seules les classes, les cases et la barre
+// changent, et le focus clavier reste en place.
+function syncSelection() {
+  const kanban = $('.kanban');
+  const count = state.selected.size;
+  kanban.classList.toggle('kanban--selecting', count > 0);
+
+  kanban.querySelectorAll('.kanban-card').forEach((card) => {
+    const on = state.selected.has(card.dataset.id);
+    card.classList.toggle('kanban-card--selected', on);
+    card.querySelector('.kanban-card__check').checked = on;
+  });
+
+  kanban.querySelectorAll('.kanban-col').forEach((col) => {
+    const box = col.querySelector('.kanban-col__check');
+    if (!box) return;
+    const ids = [...col.querySelectorAll('.kanban-card')].map((c) => c.dataset.id);
+    const n = ids.filter((id) => state.selected.has(id)).length;
+    box.checked = n > 0 && n === ids.length;
+    box.indeterminate = n > 0 && n < ids.length;
+  });
+
+  const bar = $('#selection-bar');
+  bar.classList.toggle('hidden', count === 0);
+  $('#selection-count').textContent = count === 1 ? '1 sélectionnée' : `${count} sélectionnées`;
+  // Les messages (toasts) remontent au-dessus de la barre
+  document.body.style.setProperty('--selection-bar-height', count > 0 ? `${bar.offsetHeight}px` : '0px');
+  document.body.classList.toggle('has-selection', count > 0);
+}
+
+function setSelected(ids, on) {
+  for (const id of ids) {
+    if (on) state.selected.add(id);
+    else state.selected.delete(id);
+  }
+  syncSelection();
+}
+
+function toggleSelected(id) {
+  state.lastToggled = id;
+  setSelected([id], !state.selected.has(id));
+}
+
+function clearSelection() {
+  if (state.selected.size === 0) return;
+  state.selected.clear();
+  syncSelection();
+}
+
+function setupSelection() {
+  const kanban = $('.kanban');
+
+  kanban.addEventListener('change', (e) => {
+    const cardBox = e.target.closest('.kanban-card__check');
+    if (cardBox) {
+      const id = cardBox.closest('.kanban-card').dataset.id;
+      state.lastToggled = id;
+      setSelected([id], cardBox.checked);
+      return;
+    }
+    const colBox = e.target.closest('.kanban-col__check');
+    if (colBox) {
+      const ids = [...colBox.closest('.kanban-col').querySelectorAll('.kanban-card')].map((c) => c.dataset.id);
+      setSelected(ids, colBox.checked);
+    }
+  });
+
+  $('#selection-status').innerHTML += UI.STATUSES.map((s) => `<option value="${s.id}">${esc(s.label)}</option>`).join('');
+
+  $('#selection-clear').addEventListener('click', () => {
+    const back = state.lastToggled && document.querySelector(`.kanban-card[data-id="${CSS.escape(state.lastToggled)}"]`);
+    clearSelection();
+    if (back) back.focus();
+  });
+
+  // Échap vide la sélection, sauf quand il ferme le panneau : panneau encore ouvert,
+  // ou déjà fermé par ce même Échap (preventDefault), selon l'ordre des écouteurs.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || e.defaultPrevented || state.selected.size === 0) return;
+    if (!$('.panel').classList.contains('hidden')) return;
+    clearSelection();
+  });
 }
 
 // Délégation d'événements : le Kanban est redessiné à chaque modification
@@ -130,20 +228,34 @@ function setupKanbanEvents() {
   const kanban = $('.kanban');
 
   kanban.addEventListener('click', (e) => {
+    // Les cases sont traitées par l'événement `change` (setupSelection)
+    if (e.target.closest('.kanban-card__check, .kanban-col__check')) return;
     const add = e.target.closest('.kanban-col__add');
     if (add) {
       openPanel({ status: add.closest('.kanban-col').dataset.status, returnFocus: add });
       return;
     }
     const card = e.target.closest('.kanban-card');
-    if (card) openPanel({ id: card.dataset.id, returnFocus: card });
+    if (!card) return;
+    // Ctrl/Cmd+clic, ou n'importe quel clic pendant une sélection : cocher au lieu d'ouvrir
+    if (e.ctrlKey || e.metaKey || state.selected.size > 0) {
+      toggleSelected(card.dataset.id);
+      return;
+    }
+    openPanel({ id: card.dataset.id, returnFocus: card });
   });
 
   kanban.addEventListener('keydown', (e) => {
-    const card = e.target.closest('.kanban-card');
-    if (card && e.key === 'Enter') {
+    // Seulement sur la carte elle-même : la case qu'elle contient a son propre comportement
+    const card = e.target.classList.contains('kanban-card') ? e.target : null;
+    if (!card) return;
+    if (e.key === ' ') {
       e.preventDefault();
-      openPanel({ id: card.dataset.id, returnFocus: card });
+      toggleSelected(card.dataset.id);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (state.selected.size > 0) toggleSelected(card.dataset.id);
+      else openPanel({ id: card.dataset.id, returnFocus: card });
     }
   });
 
