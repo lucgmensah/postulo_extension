@@ -71,31 +71,88 @@ var JobTracker = globalThis.JobTracker || (() => {
     }
   }
 
-  // Identifiant stable d'une offre sur un site supporté, ou null si l'URL
-  // n'est pas une page d'offre. Sur Indeed et LinkedIn, l'identifiant est
-  // dans les paramètres : on ne peut pas simplement les supprimer.
-  function siteJobKey(url) {
-    const u = parseUrl(url);
+  // --- SITES RECONNUS ---
+  // `domains` : le domaine lui-même et ses sous-domaines. `names` : noms du site,
+  // retirés des titres et des entreprises lus sur la page. `key` : identifiant de
+  // l'offre dans l'URL, ou null hors d'une page d'offre. Sur Indeed, LinkedIn et
+  // Cadremploi, l'identifiant est dans les paramètres : on ne peut pas les supprimer.
+  // Tout domaine ajouté ici doit l'être aussi dans manifest.json.
+  const pathPart = (u, regex) => {
+    const m = u.pathname.match(regex);
+    return m ? m.slice(1).join('/') : null;
+  };
+
+  const SITES = [
+    {
+      id: 'linkedin',
+      domains: ['linkedin.com'],
+      names: ['linkedin'],
+      key: (u) => pathPart(u, /\/jobs\/view\/(?:[^/]*-)?(\d+)/) || u.searchParams.get('currentJobId') || u.searchParams.get('jobId')
+    },
+    {
+      id: 'indeed',
+      domains: ['indeed.com', 'indeed.fr'],
+      names: ['indeed', 'indeed.com'],
+      key: (u) => u.searchParams.get('jk') || u.searchParams.get('vjk') || u.searchParams.get('jobId') || u.searchParams.get('id')
+    },
+    {
+      id: 'wttj',
+      domains: ['welcometothejungle.com'],
+      names: ['welcome to the jungle'],
+      key: (u) => (pathPart(u, /\/companies\/([^/]+)\/jobs\/([^/?#]+)/) || '').toLowerCase()
+    },
+    {
+      id: 'hellowork',
+      domains: ['hellowork.com'],
+      names: ['hellowork', 'hello work'],
+      key: (u) => pathPart(u, /\/emplois\/(\d+)\.html$/)
+    },
+    {
+      id: 'francetravail',
+      domains: ['candidat.francetravail.fr'],
+      names: ['france travail'],
+      key: (u) => (pathPart(u, /\/offres\/recherche\/detail\/([A-Za-z0-9]+)/) || '').toUpperCase()
+    },
+    {
+      id: 'cadremploi',
+      domains: ['cadremploi.fr'],
+      names: ['cadremploi'],
+      key: (u) => (u.pathname.startsWith('/emploi/detail_offre') ? u.searchParams.get('offreId') : null)
+    },
+    {
+      id: 'jobteaser',
+      domains: ['jobteaser.com'],
+      names: ['jobteaser'],
+      key: (u) => (pathPart(u, /\/job-offers\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i) || '').toLowerCase()
+    },
+    {
+      id: 'freework',
+      domains: ['free-work.com'],
+      names: ['free-work', 'freework'],
+      key: (u) => (pathPart(u, /\/tech-it\/job-mission\/([^/]+)\/([^/?#]+)/) || '').toLowerCase()
+    }
+  ];
+
+  function findSite(u) {
     if (!u) return null;
     const host = u.hostname;
+    return SITES.find((s) => s.domains.some((d) => host === d || host.endsWith('.' + d))) || null;
+  }
 
-    if (host === 'linkedin.com' || host.endsWith('.linkedin.com')) {
-      const viewMatch = u.pathname.match(/\/jobs\/view\/(?:[^/]*-)?(\d+)/);
-      const id = (viewMatch && viewMatch[1]) || u.searchParams.get('currentJobId') || u.searchParams.get('jobId');
-      return id ? `linkedin:${id}` : null;
-    }
+  // Site reconnu de cette URL ({ id, names }), que la page soit une offre ou non
+  function siteOf(url) {
+    const site = findSite(parseUrl(url));
+    return site ? { id: site.id, names: site.names } : null;
+  }
 
-    if (host === 'indeed.com' || host.endsWith('.indeed.com') || host === 'indeed.fr' || host.endsWith('.indeed.fr')) {
-      const id = u.searchParams.get('jk') || u.searchParams.get('vjk') || u.searchParams.get('jobId') || u.searchParams.get('id');
-      return id ? `indeed:${id}` : null;
-    }
-
-    if (host === 'welcometothejungle.com' || host.endsWith('.welcometothejungle.com')) {
-      const match = u.pathname.match(/\/companies\/([^/]+)\/jobs\/([^/?#]+)/);
-      return match ? `wttj:${match[1]}/${match[2]}`.toLowerCase() : null;
-    }
-
-    return null;
+  // Identifiant stable d'une offre sur un site reconnu, ou null si l'URL
+  // n'est pas une page d'offre.
+  function siteJobKey(url) {
+    const u = parseUrl(url);
+    const site = findSite(u);
+    if (!site) return null;
+    const key = site.key(u);
+    return key ? `${site.id}:${key}` : null;
   }
 
   // Clé de comparaison d'URL : identifiant du site si connu, sinon URL sans paramètres
@@ -109,9 +166,7 @@ var JobTracker = globalThis.JobTracker || (() => {
   }
 
   function isSupportedSite(url) {
-    const u = parseUrl(url);
-    if (!u) return false;
-    return /(^|\.)(linkedin|welcometothejungle)\.com$/.test(u.hostname) || /(^|\.)indeed\.(com|fr)$/.test(u.hostname);
+    return findSite(parseUrl(url)) !== null;
   }
 
   const normalize = (str) => String(str || '').trim().toLowerCase();
@@ -302,6 +357,7 @@ var JobTracker = globalThis.JobTracker || (() => {
     saveAll,
     update,
     onChange,
+    siteOf,
     siteJobKey,
     jobKey,
     isSupportedSite,

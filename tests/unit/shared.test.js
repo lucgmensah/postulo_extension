@@ -43,6 +43,36 @@ test('isSupportedSite', () => {
   assert.ok(!J.isSupportedSite('https://evil-indeed.com.example.org/'));
 });
 
+test('jobKey : nouveaux sites', () => {
+  assert.equal(J.jobKey('https://www.hellowork.com/fr-fr/emplois/83247207.html?utm=x'), 'hellowork:83247207');
+  assert.equal(J.jobKey('https://candidat.francetravail.fr/offres/recherche/detail/216hqdm'), 'francetravail:216HQDM');
+  assert.equal(J.jobKey('https://www.cadremploi.fr/emploi/detail_offre?offreId=156541529064953069&x=1'), 'cadremploi:156541529064953069');
+  assert.equal(J.jobKey('https://hec.jobteaser.com/fr/job-offers/01202997-A1D9-4052-a335-7f9169ac5d1d-thales-stage'), 'jobteaser:01202997-a1d9-4052-a335-7f9169ac5d1d');
+  assert.equal(J.jobKey('https://www.free-work.com/fr/tech-it/job-mission/architecte-solutions/Architecte-Metiers?a=1'), 'freework:architecte-solutions/architecte-metiers');
+});
+
+test('siteJobKey : null hors page d\'offre sur les nouveaux sites', () => {
+  const pages = [
+    'https://www.hellowork.com/fr-fr/emploi/recherche.html?k=dev',
+    'https://candidat.francetravail.fr/offres/recherche?motsCles=dev',
+    'https://www.cadremploi.fr/emploi/liste-offres/q-dev',
+    'https://www.jobteaser.com/fr/job-offers?q=dev',
+    'https://www.free-work.com/fr/tech-it/jobs?query=dev'
+  ];
+  for (const u of pages) {
+    assert.equal(J.siteJobKey(u), null, u);
+    assert.ok(J.isSupportedSite(u), u);
+  }
+});
+
+test('siteOf : identifiant, noms, hôtes ressemblants refusés', () => {
+  assert.equal(J.siteOf('https://www.hellowork.com/').id, 'hellowork');
+  assert.ok(J.siteOf('https://fr.indeed.com/').names.includes('indeed'));
+  assert.equal(J.siteOf('https://evil-hellowork.com.example.org/fr-fr/emplois/1.html'), null);
+  assert.equal(J.siteOf('https://www.francetravail.fr/'), null);
+  assert.equal(J.siteOf('pas une url'), null);
+});
+
 const LIST = [
   { id: '1', title: 'Dev', company: 'Acme', url: 'https://fr.indeed.com/viewjob?jk=aaa' },
   { id: '2', company: 'NoTitle' }
