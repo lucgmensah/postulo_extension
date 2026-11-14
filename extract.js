@@ -165,7 +165,13 @@ var JobExtract = globalThis.JobExtract || (() => {
     const fiche = postingFields(posting);
     const sure = fiche.title || clean(found.title);
     const title = sure || stripSiteName(fallback.title, names);
-    let company = fiche.company || clean(found.company) || clean(fallback.company);
+    // Le nom du site n'est pas une entreprise. Le secours (og:site_name) vaut parfois
+    // son adresse : il est écarté dès qu'il contient le nom du site.
+    let company = fiche.company || clean(found.company);
+    if (!company) {
+      const generic = clean(fallback.company);
+      company = names.some((name) => generic.toLowerCase().includes(name)) ? '' : generic;
+    }
     if (names.includes(company.toLowerCase())) company = '';
     const location = fiche.location || normalizeLocation(found.location);
     return {

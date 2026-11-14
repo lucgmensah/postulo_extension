@@ -36,10 +36,16 @@
         "https://*.linkedin.com/*",
         "https://*.indeed.com/*",
         "https://*.indeed.fr/*",
-        "https://*.welcometothejungle.com/*"
+        "https://*.welcometothejungle.com/*",
+        "https://*.hellowork.com/*",
+        "https://candidat.francetravail.fr/*",
+        "https://*.cadremploi.fr/*",
+        "https://*.jobteaser.com/*",
+        "https://*.free-work.com/*"
       ],
       "js": [
         "shared.js",
+        "extract.js",
         "ui.js",
         "content.js"
       ],
@@ -58,7 +64,12 @@
         "https://*.linkedin.com/*",
         "https://*.indeed.com/*",
         "https://*.indeed.fr/*",
-        "https://*.welcometothejungle.com/*"
+        "https://*.welcometothejungle.com/*",
+        "https://*.hellowork.com/*",
+        "https://candidat.francetravail.fr/*",
+        "https://*.cadremploi.fr/*",
+        "https://*.jobteaser.com/*",
+        "https://*.free-work.com/*"
       ]
     }
   ]
