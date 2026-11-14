@@ -123,6 +123,38 @@ test('applyStatus : date du jour ajoutée seulement en passant à « envoyée »
   assert.equal(J.applyStatus({ status: 'applied', dateApplied: '' }, 'interview').dateApplied, '');
 });
 
+// --- Actions sur plusieurs candidatures ---
+const ids = (list) => list.map((c) => c.id).join(' ');
+const FIVE = ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id, status: 'wishlist', dateApplied: '' }));
+
+test('removeByIds : retire les candidatures et note leur position d\'origine', () => {
+  const { list, removed } = J.removeByIds(FIVE, ['d', 'b', 'inconnu']);
+  assert.equal(ids(list), 'a c e');
+  assert.deepEqual(removed.map((r) => [r.item.id, r.index]), [['b', 1], ['d', 3]]);
+  assert.equal(ids(FIVE), 'a b c d e', 'liste d\'origine modifiée');
+});
+
+test('restoreRemoved : chaque candidature revient à sa position, sans doublon', () => {
+  const { list, removed } = J.removeByIds(FIVE, ['b', 'd']);
+  assert.equal(ids(J.restoreRemoved(list, removed)), 'a b c d e');
+  // Une candidature ajoutée entre-temps (en tête) ne décale pas les positions d'origine
+  assert.equal(ids(J.restoreRemoved([{ id: 'x' }, ...list], removed)), 'x b a d c e');
+  // Déjà revenue ailleurs : pas de doublon
+  assert.equal(ids(J.restoreRemoved([...list, FIVE[1]], removed)), 'a c e d b');
+  assert.equal(J.restoreRemoved(FIVE, removed), null);
+  assert.equal(ids(list), 'a c e', 'liste reçue modifiée');
+});
+
+test('applyStatusToIds : seules les candidatures visées changent', () => {
+  const list = [{ id: 'a', status: 'wishlist', dateApplied: '' }, { id: 'b', status: 'wishlist', dateApplied: '' }, { id: 'c', status: 'interview', dateApplied: '2026-01-02' }];
+  const updated = J.applyStatusToIds(list, ['a', 'c'], 'applied');
+  assert.deepEqual(updated.map((c) => c.status), ['applied', 'wishlist', 'applied']);
+  assert.equal(updated[0].dateApplied, J.todayISO());
+  assert.equal(updated[2].dateApplied, '2026-01-02');
+  assert.equal(updated[1], list[1]);
+  assert.equal(list[0].status, 'wishlist', 'objet d\'origine modifié');
+});
+
 test('createCandidature : initialise le champ cv à null', () => {
   const c = J.createCandidature({ title: 'Dev' });
   assert.equal(c.cv, null);

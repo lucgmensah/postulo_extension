@@ -285,6 +285,36 @@ var JobTracker = globalThis.JobTracker || (() => {
     return { ...candidature, status, dateApplied: needsDate ? todayISO() : candidature.dateApplied };
   }
 
+  // --- ACTIONS SUR PLUSIEURS CANDIDATURES ---
+  // Liste sans les candidatures visées, et chacune avec sa position d'origine
+  // (ordre croissant) pour pouvoir annuler.
+  function removeByIds(list, ids) {
+    const wanted = new Set(ids);
+    const removed = [];
+    const kept = [];
+    list.forEach((item, index) => {
+      if (wanted.has(item.id)) removed.push({ item, index });
+      else kept.push(item);
+    });
+    return { list: kept, removed };
+  }
+
+  // Annulation : chaque candidature revient à sa position d'origine (ou en fin de liste).
+  // Celles déjà présentes sont ignorées ; null s'il n'y a rien à réinsérer.
+  function restoreRemoved(list, removed) {
+    const present = new Set(list.map((c) => c.id));
+    const missing = removed.filter((r) => !present.has(r.item.id)).sort((a, b) => a.index - b.index);
+    if (missing.length === 0) return null;
+    const next = list.slice();
+    for (const { item, index } of missing) next.splice(Math.min(index, next.length), 0, item);
+    return next;
+  }
+
+  function applyStatusToIds(list, ids, status) {
+    const wanted = new Set(ids);
+    return list.map((c) => (wanted.has(c.id) ? applyStatus(c, status) : c));
+  }
+
   // --- UTILS ---
   function escapeHTML(str) {
     if (!str) return '';
@@ -367,6 +397,9 @@ var JobTracker = globalThis.JobTracker || (() => {
     todayISO,
     createCandidature,
     applyStatus,
+    removeByIds,
+    restoreRemoved,
+    applyStatusToIds,
     parseReminder,
     toReminderValue,
     reminderPresets,
