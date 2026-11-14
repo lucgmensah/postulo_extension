@@ -68,6 +68,74 @@ const CASES = [
   }
 ];
 
+// Page Hello Work dont l'en-tête et la fiche n'arrivent qu'après `delay` ms,
+// comme sur un site qui affiche l'offre une fois la page chargée.
+function lateHelloWork(delay) {
+  const html = readPage('hellowork');
+  const body = html.match(/<body>([\s\S]*)<\/body>/)[1];
+  const fiche = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1];
+  const literal = (text) => JSON.stringify(text).replace(/</g, '\\u003c');
+  return html
+    .replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/, '')
+    .replace(/<body>[\s\S]*<\/body>/, `<body><script>
+      setTimeout(() => {
+        document.body.insertAdjacentHTML('afterbegin', ${literal(body)});
+        const fiche = document.createElement('script');
+        fiche.type = 'application/ld+json';
+        fiche.textContent = ${literal(fiche)};
+        document.head.appendChild(fiche);
+      }, ${delay});
+    </script></body>`);
+}
+
+const HELLOWORK_URL = 'https://www.hellowork.com/fr-fr/emplois/83247207.html';
+const HELLOWORK_FIELDS = { title: 'Développeur - Développeuse Flutter H/F', company: 'Alpee', location: 'Chambéry (73)' };
+
+const widgetPresent = (page) => page.evaluate(() => {
+  const host = document.getElementById('job-tracker-floating-root');
+  return !!(host && host.shadowRoot && host.shadowRoot.querySelector('.wt-pill'));
+});
+
+describe('Extraction - moment de la lecture', () => {
+  test('offre affichée après 2 s : le widget attend l\'offre au lieu de figer le titre de la page', async () => {
+    const page = await openFixture(HELLOWORK_URL, lateHelloWork(2000));
+    await sleep(1500);
+    assert.equal(await widgetPresent(page), false, 'widget créé avant l\'affichage de l\'offre');
+    const fields = await widgetFields(page);
+    await page.close();
+    assert.deepEqual(fields, HELLOWORK_FIELDS);
+  });
+
+  test('offre affichée après 9 s : la page est relue à l\'ouverture du panneau', async () => {
+    const page = await openFixture(HELLOWORK_URL, lateHelloWork(9000));
+    // Le widget finit par s'afficher avec le titre de la page, faute de mieux
+    await page.waitForFunction(() => {
+      const host = document.getElementById('job-tracker-floating-root');
+      return host && host.shadowRoot && host.shadowRoot.querySelector('.wt-pill');
+    }, { timeout: 8500 });
+    await page.waitForSelector("[data-cy='jobTitle']", { timeout: 15000 });
+    const fields = await widgetFields(page);
+    await page.close();
+    assert.deepEqual(fields, HELLOWORK_FIELDS);
+  });
+
+  test('un champ modifié à la main n\'est pas écrasé à la réouverture du panneau', async () => {
+    const page = await openFixture(HELLOWORK_URL, readPage('hellowork'));
+    await widgetFields(page);
+    const title = await page.evaluate(() => {
+      const root = document.getElementById('job-tracker-floating-root').shadowRoot;
+      root.getElementById('wt-title').value = 'Mon titre';
+      root.querySelector('.wt-close').click();
+      root.querySelector('.wt-pill').click();
+      return root.getElementById('wt-title').value;
+    });
+    const fields = await widgetFields(page);
+    await page.close();
+    assert.equal(title, 'Mon titre');
+    assert.deepEqual(fields, { ...HELLOWORK_FIELDS, title: 'Mon titre' });
+  });
+});
+
 describe('Extraction - pages réelles enregistrées', () => {
   for (const c of CASES) {
     test(`${c.page} : poste, entreprise et lieu`, async () => {
@@ -95,6 +163,14 @@ describe('Extraction - pages réelles enregistrées', () => {
     const fields = await widgetFields(page);
     await page.close();
     assert.deepEqual(fields, { title: 'Développeur - Développeuse Flutter H/F', company: 'Alpee', location: 'Chambéry (73)' });
+  });
+
+  test('fiche présente sur une page qui n\'est pas une offre : pas de widget', async () => {
+    const page = await openFixture('https://www.hellowork.com/fr-fr/entreprises/alpee-93511.html', readPage('hellowork'));
+    await sleep(3000);
+    const present = await page.evaluate(() => !!document.getElementById('job-tracker-floating-root'));
+    await page.close();
+    assert.equal(present, false);
   });
 
   test('page de recherche d\'un nouveau site : pas de widget', async () => {
