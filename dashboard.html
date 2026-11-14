@@ -33,6 +33,19 @@
     <section class="kanban" aria-label="Tableau des candidatures"></section>
   </main>
 
+  <!-- ACTIONS SUR LA SÉLECTION -->
+  <div id="selection-bar" class="selection-bar hidden" role="toolbar" aria-label="Actions sur la sélection">
+    <span id="selection-count" class="selection-bar__count" aria-live="polite"></span>
+    <select id="selection-status" class="select selection-bar__status" aria-label="Changer le statut de la sélection">
+      <option value="">Changer le statut…</option>
+    </select>
+    <button type="button" id="selection-export" class="btn btn--secondary btn--sm">Exporter</button>
+    <button type="button" id="selection-delete" class="btn btn--danger btn--sm">Supprimer</button>
+    <button type="button" id="selection-clear" class="icon-btn icon-btn--sm" aria-label="Tout désélectionner" title="Tout désélectionner (Échap)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+
   <!-- PANNEAU DE DÉTAIL -->
   <div class="panel-backdrop hidden"></div>
   <aside class="panel hidden" role="dialog" aria-modal="true" aria-labelledby="panel-heading">
