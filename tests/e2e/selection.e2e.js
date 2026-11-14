@@ -40,6 +40,11 @@ async function selectCards(page, ids) {
   for (const id of ids) await ctrlClick(page, card(id));
 }
 
+async function chooseStatus(page, status) {
+  await page.click('#selection-status');
+  await page.click(`#selection-status-menu [data-status="${status}"]`);
+}
+
 const columnIds = (page, status) => page.$$eval(`.kanban-col[data-status="${status}"] .kanban-card`, (cards) => cards.map((c) => c.dataset.id));
 
 const todayLocal = () => {
@@ -214,21 +219,51 @@ describe('Sélection - actions', () => {
   test('changer le statut de la sélection', async () => {
     const page = await openDashboard();
     await selectCards(page, ['s4', 's5']);
-    await page.select('#selection-status', 'interview');
+    await chooseStatus(page, 'interview');
     await sleep(400);
     assert.deepEqual((await columnIds(page, 'interview')).sort(), ['s2', 's4', 's5']);
     const store = await readStore(browser);
     assert.deepEqual(store.filter((c) => ['s4', 's5'].includes(c.id)).map((c) => c.status), ['interview', 'interview']);
     assert.match(await page.$eval('.toast', (t) => t.textContent), /2 candidatures passées en « Entretien »/);
     assert.deepEqual((await selection(page)).ids.sort(), ['s4', 's5'], 'sélection perdue');
-    assert.equal(await page.$eval('#selection-status', (s) => s.value), '');
+    assert.ok(await page.$eval('#selection-status-menu', (m) => m.classList.contains('hidden')), 'menu resté ouvert');
+    await page.close();
+  });
+
+  test('parcourir le menu de statut au clavier ne change rien avant validation', async () => {
+    // Chrome sous Windows déclenche `change` à chaque flèche sur un menu fermé :
+    // cartes hors « À postuler », sinon la première option ne changerait rien de visible.
+    const page = await openDashboard();
+    await selectCards(page, ['s1', 's2']);
+    const statuses = async () => (await readStore(browser)).filter((c) => ['s1', 's2'].includes(c.id)).map((c) => c.status);
+    await page.focus('#selection-status');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    await sleep(400);
+    assert.deepEqual(await statuses(), ['applied', 'interview'], 'statut changé par une simple flèche');
+
+    // Entrée ouvre le menu, les flèches s'y déplacent, Entrée valide
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    await sleep(300);
+    assert.deepEqual(await statuses(), ['applied', 'interview'], 'statut changé avant validation');
+    await page.keyboard.press('Enter');
+    await sleep(400);
+    assert.deepEqual(await statuses(), ['interview', 'interview']);
+
+    // Échap ferme le menu sans vider la sélection
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Escape');
+    assert.ok(await page.$eval('#selection-status-menu', (m) => m.classList.contains('hidden')));
+    assert.deepEqual((await selection(page)).ids.sort(), ['s1', 's2']);
     await page.close();
   });
 
   test('passer en « Candidature envoyée » renseigne la date du jour si elle manque', async () => {
     const page = await openDashboard();
     await selectCards(page, ['s5']);
-    await page.select('#selection-status', 'applied');
+    await chooseStatus(page, 'applied');
     await sleep(400);
     const s5 = (await readStore(browser)).find((c) => c.id === 's5');
     assert.equal(s5.status, 'applied');
@@ -309,7 +344,7 @@ describe('Sélection - actions', () => {
   test('les messages s\'affichent au-dessus de la barre', async () => {
     const page = await openDashboard();
     await selectCards(page, ['s4']);
-    await page.select('#selection-status', 'offer');
+    await chooseStatus(page, 'offer');
     await page.waitForSelector('.toast');
     const r = await page.evaluate(() => ({
       toast: document.querySelector('.toast').getBoundingClientRect().bottom,

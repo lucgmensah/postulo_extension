@@ -245,7 +245,7 @@ body { min-height: 100vh; overflow-x: hidden; }
   font-weight: 700;
   white-space: nowrap;
 }
-.selection-bar__status { width: auto; padding-top: 5px; padding-bottom: 5px; font-size: 12px; }
+#selection-status { display: inline-flex; align-items: center; gap: 4px; }
 
 @keyframes selection-bar-in {
   from { opacity: 0; transform: translate(-50%, 8px); }
